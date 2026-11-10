@@ -222,6 +222,153 @@
       }
     },
 
+    /* --- Phase 1b: transaction model --- */
+
+    // On-chain lifecycle (followup §3.2). confirming takes {n} and {total}.
+    transactions: {
+      title: "Transactions",
+      subtitle: "Each payment can arrive in several transactions, screened one by one.",
+      amount: "Amount",
+      hash: "Transaction hash",
+      network: "Network",
+      walletType: "Sent from",
+      confirmations: "{n} of {total} confirmations",
+      confirming: "Confirming ({n} of {total})",
+      status: {
+        detected: "Detected",
+        confirming: "Confirming",
+        checks: "Checks",
+        converted: "Converted",
+        credited: "Credited",
+        cleared: "Cleared",
+        held: "In review",
+        in_review: "In review",
+        frozen: "Cannot be released"
+      },
+      wallet: { own: "Own wallet", exchange: "Exchange account" },
+      splitTitle: "Partially credited, part in review",
+      splitBody: "Part of this payment has cleared and been credited. The rest is still being checked."
+    },
+
+    // Derived payment status per seat (derive.js vocabulary). Kept separate
+    // from statusLabels so legacy screens keep their existing keys.
+    derivedStatus: {
+      pending: { payer: "Awaiting payment", merchant: "Open", compliance: "Open" },
+      paid: { payer: "Paid", merchant: "Credited", compliance: "Cleared" },
+      partial: { payer: "Partially paid", merchant: "Partially paid", compliance: "Partial" },
+      overpaid: { payer: "Overpaid", merchant: "Overpaid", compliance: "Overpaid" },
+      in_review: { payer: "Under review", merchant: "On hold", compliance: "In review" },
+      partially_credited_in_review: {
+        payer: "Partially credited, part in review",
+        merchant: "Partially credited, part in review",
+        compliance: "Partially credited, part in review"
+      },
+      frozen: { payer: "Pending", merchant: "Cannot be released", compliance: "Cannot be released" }
+    },
+
+    // Travel Rule questions on S1 (followup §3.3).
+    travelRule: {
+      heading: "Payer details",
+      buyerQuestion: "Are you the buyer named on the sale agreement?",
+      yes: "Yes, I am the buyer",
+      no: "No, I am paying for the buyer",
+      relationshipLabel: "Relationship to the buyer",
+      relationships: {
+        spouse: "Spouse",
+        parent: "Parent",
+        company: "The buyer's company",
+        other: "Other"
+      },
+      sendingFrom: "Sending from",
+      exchangeOption: "An exchange account",
+      ownWallet: "My own wallet",
+      ownWalletNote: "Gate may ask you to confirm that you control this wallet.",
+      exchangeNote: "Choose the exchange you will withdraw from.",
+      thresholdNote: "Travel Rule information is required above AED 3,500 for the UAE entity and for all amounts for the Bahrain entity.",
+      required: "Answer this question to continue."
+    },
+
+    // Refunds (followup §3.4).
+    refund: {
+      heading: "Refund address",
+      exchangeExplanation: "Payments from exchanges come from the exchange's shared wallet, so we need an address in your own account.",
+      addressPrompt: "Refund address in your own exchange account",
+      addressPlaceholder: "Paste the address from your exchange account",
+      ownWalletNote: "The refund goes back to the wallet that sent the payment, after that wallet is screened again.",
+      amountNote: "The {fee} USDT network fee is deducted. No conversion takes place.",
+      frozenNeverRefunded: "Frozen funds are never refunded.",
+      submit: "Confirm refund address",
+      submitted: "Refund address received (simulated)",
+      screeningNote: "Refunds are sent only to an address that passes screening."
+    },
+
+    // Compliance decision panel in the demo bar (followup §4.2).
+    compliancePanel: {
+      title: "Compliance decision (simulated)",
+      open: "Open case",
+      caseSummary: "Case summary",
+      amount: "Amount",
+      payer: "Payer",
+      country: "Country",
+      buyerAnswer: "Buyer answer",
+      walletType: "Wallet type",
+      screening: "Screening summary (illustrative)",
+      walletHistory: "Wallet history",
+      actions: {
+        approve: "Approve",
+        request: "Request information",
+        decline: "Decline and refund",
+        freeze: "Freeze"
+      },
+      internalReason: "Internal reason",
+      note: "Note",
+      notePlaceholder: "Why this decision was taken (analyst only)",
+      reasonRequired: "Choose an internal reason.",
+      noteRequired: "A note is required.",
+      preview: "Preview — what will be shown",
+      payerPreview: "Payer sees",
+      merchantPreview: "Merchant sees",
+      eventPreview: "Event sent",
+      caseLabels: {
+        internalReason: "Internal reason (analyst only)",
+        externalStatus: "External status",
+        infoRequested: "Information requested",
+        deadline: "Decision deadline",
+        decisionLog: "Decision log",
+        txId: "Transaction"
+      },
+      footer: "In the product this is the analyst's case screen. Out of scope for this demo."
+    },
+
+    // Merchant-facing events on S4 (followup §3.6).
+    events: {
+      title: "Events sent to your system",
+      subtitle: "The same payloads your integration would receive.",
+      signature: "Gate-Signature: demo",
+      payload: "Payload",
+      empty: "No events yet.",
+      viewOnExplorer: "View on explorer",
+      explorerDisabled: "Explorer links are disabled in this prototype.",
+      copyPayload: "Copy payload"
+    },
+
+    // Address safety (followup §3.7).
+    address: {
+      copyEveryTime: "Copy the address from this page every time, never from your wallet's history.",
+      network: "Network",
+      qrLabel: "QR placeholder (not scannable) · {network}",
+      groupsHint: "Shown in groups of four. Check the first and last six characters.",
+      copied: "Copied {asset} address on {network}"
+    },
+
+    // Today versus Proposed (followup §4.3) and time labelling (§3.9).
+    view: {
+      label: "View",
+      today: "Today",
+      proposed: "Proposed",
+      gst: "GST (UTC+4)"
+    },
+
     // Status labels per seat (used by chips)
     statusLabels: {
       pending:     { payer: "Awaiting payment",    merchant: "Open",              compliance: "Open" },
