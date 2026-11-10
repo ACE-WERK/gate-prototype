@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gate — Derivation Tests</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0a0a0a;color:#e8e8e8;padding:24px;max-width:900px;margin:0 auto}
+h1{font-size:18px}
+.test{margin:8px 0;padding:8px;border-radius:4px;font-size:13px}
+.pass{background:#0d2818;border:1px solid #1a4a2e;color:#4ade80}
+.fail{background:#2d0a0a;border:1px solid #4a1a1a;color:#f87171}
+.summary{margin-top:24px;padding:12px;border-radius:6px;font-size:14px}
+.summary.all-pass{background:#0d2818;border:1px solid #1a4a2e}
+.summary.has-fail{background:#2d0a0a;border:1px solid #4a1a1a}
+</style>
+</head>
+<body>
+<h1>Gate — Status Derivation Tests</h1>
+<p id="status">Running…</p>
+<div id="results"></div>
+<div id="summary"></div>
+
+<script src="../js/derive.js"></script>
+<script src="../js/fixtures.js"></script>
+<script>
+(function () {
+  "use strict";
+  var D = window.GATE_DERIVE;
+  var F = window.GATE_FIXTURES;
+  if (!D || !D.derivePayment) {
+    document.getElementById("status").textContent = "FAIL: GATE_DERIVE not found";
+    return;
+  }
+  var results = [];
+  function check(name, cond, detail) {
+    results.push({ name: name, pass: !!cond, detail: detail || "" });
+  }
+
+  // Helper: build a minimal tx
+  function tx(amount, state) {
+    return { id: "tx-test", amountSc: amount, screeningState: state || "clear", status: "cleared" };
+  }
+
+  // === H1: happy path, 136,147.04 USDT, 1 tx, cleared ===
+  var h1 = D.derivePayment([tx(136147.04)], 136147.04, 0.005);
+  check("H1: status=paid", h1.status === "paid", "got " + h1.status);
+  check("H1: clearedSc=136147.04", Math.abs(h1.clearedSc - 136147.04) < 0.01);
+
+  // === E15: two transactions ===
+  var e15tx1 = { id: "tx1", amountSc: 60000.00, screeningState: "in_review", status: "held" };
+  var e15tx2 = { id: "tx2", amountSc: 8073.52, screeningState: "clear", status: "cleared" };
+  var e15 = D.derivePayment([e15tx1, e15tx2], 68073.52, 0.005);
+  check("E15: status=partially_credited_in_review", e15.status === "partially_credited_in_review", "got " + e15.status);
+  check("E15: clearedSc=8073.52", Math.abs(e15.clearedSc - 8073.52) < 0.01);
+  check("E15: inReviewSc=60000.00", Math.abs(e15.inReviewSc - 60000.00) < 0.01);
+
+  // E15 after compliance approves tx1
+  var e15tx1b = { id: "tx1", amountSc: 60000.00, screeningState: "clear", status: "cleared" };
+  var e15b = D.derivePayment([e15tx1b, e15tx2], 68073.52, 0.005);
+  check("E15 (approved): status=paid", e15b.status === "paid", "got " + e15b.status);
+  check("E15 (approved): clearedSc=68073.52", Math.abs(e15b.clearedSc - 68073.52) < 0.01);
+
+  // E15 credited AED: 29,353.50 + 218,146.50 = 247,500.00
+  var feeRate = 0.024;
+  var rate = 3.6;
+  var credited1 = 8073.52 * rate * (1 - feeRate);
+  var credited2 = 60000.00 * rate * (1 - feeRate);
+  var totalCredited = credited1 + credited2;
+  check("E15: credit1 ≈ 29353.50", Math.abs(credited1 - 29353.50) < 1.0, "got " + credited1.toFixed(2));
+  check("E15: credit2 ≈ 218146.50", Math.abs(credited2 - 218146.50) < 1.0, "got " + credited2.toFixed(2));
+  check("E15: total ≈ 247500.00", Math.abs(totalCredited - 247500.00) < 2.0, "got " + totalCredited.toFixed(2));
+
+  // === E5: overpaid ===
+  var e5 = D.derivePayment([tx(27500.00)], 27229.41, 0.005);
+  check("E5: status=overpaid", e5.status === "overpaid", "got " + e5.status);
+  check("E5: surplus > 0", e5.surplus > 0, "surplus=" + e5.surplus);
+
+  // === E4: frozen ===
+  var e4tx = { id: "tx4", amountSc: 27229.41, screeningState: "clear", status: "frozen" };
+  var e4 = D.derivePayment([e4tx], 27229.41, 0.005);
+  check("E4: status=frozen", e4.status === "frozen", "got " + e4.status);
+
+  // === E2: in review ===
+  var e2tx = { id: "tx2", amountSc: 326752.89, screeningState: "in_review", status: "held" };
+  var e2 = D.derivePayment([e2tx], 326752.89, 0.005);
+  check("E2: status=in_review", e2.status === "in_review", "got " + e2.status);
+
+  // === Partial ===
+  var partial = D.derivePayment([tx(50000.00)], 100000.00, 0.005);
+  check("Partial: status=partial", partial.status === "partial", "got " + partial.status);
+  check("Partial: shortfall=50000", Math.abs(partial.shortfall - 50000) < 0.01);
+
+  // === Pending (no txs) ===
+  var pending = D.derivePayment([], 100000.00, 0.005);
+  check("Pending: status=pending", pending.status === "pending", "got " + pending.status);
+
+  // Render results
+  var div = document.getElementById("results");
+  var passCount = 0, failCount = 0;
+  results.forEach(function (r) {
+    var el = document.createElement("div");
+    el.className = "test " + (r.pass ? "pass" : "fail");
+    el.textContent = (r.pass ? "PASS" : "FAIL") + " — " + r.name + (r.detail ? " (" + r.detail + ")" : "");
+    div.appendChild(el);
+    if (r.pass) passCount++; else failCount++;
+  });
+
+  var summary = document.getElementById("summary");
+  summary.className = "summary " + (failCount === 0 ? "all-pass" : "has-fail");
+  summary.textContent = passCount + " passed, " + failCount + " failed, " + results.length + " total";
+  document.getElementById("status").textContent = failCount === 0 ? "All tests pass." : "Some tests failed.";
+})();
+</script>
+</body>
+</html>

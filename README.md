@@ -1,189 +1,89 @@
-# Gate — Payment Workflow Prototype
+# Gate — Clickable Prototype
 
-A clickable HTML/CSS/JS prototype for **Gate**, a stablecoin payment gateway for UAE real-estate developers. Built as a case-study exercise (ARP Digital interview). Three user seats — **payer**, **merchant**, **compliance** — share one live state across 14 scripted demo scenarios.
+Payment workflow prototype for the ARP Digital case study. Four product screens, a demo map, and a simulated Compliance panel.
 
-No build step, no server, no dependencies. Open `index.html` and click.
-
----
+## Live
+**https://ace-werk.github.io/gate-prototype/**
 
 ## Quick start
+- Open the URL. You land on the **demo map** with all 17 scenarios.
+- Click **Start** on any scenario card to begin.
+- **Reset** (`R`) goes back to step 1 of the current scenario.
+- **Split view** shows two seats side by side.
 
-```bash
-# Option 1: open directly
-open index.html          # macOS
-xdg-open index.html      # Linux
+## Keyboard shortcuts
 
-# Option 2: serve locally (optional)
-python3 -m http.server 8080
-# → http://localhost:8080
-```
+| Key | Action |
+|-----|--------|
+| `1` | Switch to Payer seat |
+| `2` | Switch to Merchant seat |
+| `→` | Next event / step |
+| `R` | Reset to step 1 |
+| `T` | Toggle Today / Proposed |
+| `N` | Toggle annotations |
+| `H` | Hide / show demo bar |
+| `C` | Open / close Compliance panel |
 
-Works over `file://` and any static host (GitHub Pages, Netlify, S3). Zero network requests after the initial page load — fonts are self-hosted.
+## Screens
 
----
+| Screen | Route | Description |
+|--------|-------|-------------|
+| Demo map | `#/` | All 17 scenarios in 3 groups |
+| S1 Payer checkout | `#/payer/checkout` | Travel Rule, address safety, instalment schedule |
+| S2 Payer status | `#/payer/status` | On-chain timeline, refund flow |
+| S3 Merchant payments | `#/merchant/payments` | Balance tiles, payment list, CSV export |
+| S4 Payment detail | `#/merchant/payments/:id` | Transactions, ledger, events, instalments |
 
-## What it demos
+## Demo map
 
-| Seat | Screens | What you can do |
-|------|---------|-----------------|
-| **Payer** | Checkout, Payment status | Fill the form, select USDT/USDC + network, submit, watch the payment progress through detected → checks → confirmed → paid (or flagged, overpaid, partial, etc.) |
-| **Merchant** | Payments list, Payment detail | Browse the ledger (0/1/200 row volumes), open any payment, see the timeline, apply or refund surpluses, see compliance-safe status labels |
-| **Compliance** | Case queue, Case detail | Review flagged cases, approve / decline / freeze / request info, see internal screening labels and risk context |
+Three groups of scenario cards:
 
-All three seats read the **same store**. When compliance approves a held case, the merchant's detail page updates in the same session.
+- **Everyday payments:** H1, E1, E5, E6
+- **When a payment is held:** E2, E15, E3, E4, E7
+- **Timing and exceptions:** E8, E9, E12, E16, E17
 
----
+Each card shows the scenario name, a one-line description, the roadmap line it delivers, and a Start button.
 
-## Demo controls (the bar at the top)
+## Compliance panel
 
-| Control | What it does |
-|---------|-------------|
-| **Seat** (Payer / Merchant / Compliance) | Switch the active user role. Each seat only sees its own screens. |
-| **Scenario** dropdown | 14 presets: `H1` happy path + `E1`–`E13` edge cases (underpaid, flagged, overpaid, frozen, expired, wrong network, split view, volume states, etc.) |
-| **Step / Back / Next** | Advance or rewind through the scenario's events one at a time. The counter shows `Step N / M`. |
-| **Reset** | Returns to step 1 of the **current scenario** (state is preserved, not wiped). This is the primary "start over" control for presenters. |
-| **Advance 1 hour / 1 day** | Push the demo clock forward for time-based scenarios (pool expiry, decision deadlines). |
-| **Volume** (0 / 1 / 200) | Merchant list density: empty state, single row, or 200 rows with pagination. |
-| **Split view** | Shows two seats side by side (e.g. payer + merchant) so the presenter can demonstrate cross-seat reactivity without clicking. |
-
-### Presenter workflow
-
-1. Pick a scenario from the dropdown.
-2. Click **Next** to step through events, or **Reset** to go back to step 1.
-3. Toggle seats to show the same state from different perspectives.
-4. Use **Split view** to show payer + merchant reacting simultaneously.
-5. **Reset** at any point restarts the current scenario from step 1 without losing the seat or scenario selection.
-
----
-
-## The 14 scenarios
-
-| ID | Priority | Name | Terminal state |
-|----|----------|------|---------------|
-| H1 | P0 | Happy path: exact payment clears | paid |
-| E1 | P0 | Underpaid, then topped up | partial → paid |
-| E2 | P0 | Flagged, info requested, approved | action → paid |
-| E3 | P1 | Flagged, declined and refunded | declined |
-| E4 | P1 | Flagged, frozen | frozen |
-| E5 | P1 | Overpaid | overpaid (surplus 270.59 USDT) |
-| E6 | P1 | Shortfall within tolerance | partial |
-| E7 | P1 | Hold passes its deadline | overdueHeld |
-| E8 | P1 | Pooled link expires unpaid | expired |
-| E9 | P1 | Late payment after expiry | partial |
-| E10 | P1 | Form validation | pending (client-side validation demo) |
-| E11 | P1 | List volume states | volume toggle (0/1/200) |
-| E12 | P2 | Wrong network / unsupported asset | needsManual |
-| E13 | P2 | Split view demo | held |
-
-Each scenario is a sequence of typed events (`send`, `advance`, `flag`, `note`, `volume`, `advanceClock`) applied to the shared store. The handoff spec (`GATE_PROTOTYPE_HANDOFF.md` in the parent `Case Study/` directory) documents the exact expected values per scenario.
-
----
+Opens from the demo bar as **"Compliance decision (simulated)"** when a case is open. Shows the case summary, four actions (Approve, Request information, Decline and refund, Freeze), a preview of what payer and merchant will see, and the event that will be sent. Styled as demo tooling, visually distinct from the product.
 
 ## Architecture
 
-```
-index.html                  Single entry point
-├── design-system.css       All design tokens + components (CSS custom properties)
-├── css/app.css             Layout-only (grid, flex, positioning) — no tokens
-├── design-system.html      Token/component specimen page (for design review)
-│
-└── js/
-    ├── app.js              Bootstrap: imports, store init, router start
-    ├── store.js            State store, fixtures, formatters (fmtAED/fmtSC), toasts, G() accessor
-    ├── scenarios.js        14 scenario definitions (typed event lists)
-    ├── demo-bar.js         Demo controls: seat, scenario, step, clock, volume, split view
-    ├── router.js           Hash-based router (#/payer/checkout, #/merchant/payments/:id, …)
-    ├── fixtures.js         Payment + project fixture data
-    ├── strings.js          All user-facing copy (compliance-safe labels)
-    ├── statuses.js         Status → label/colour/timeline mapping
-    │
-    └── screens/
-        ├── payer-checkout.js     S1: Form + stablecoin/network select
-        ├── payer-status.js       S2: Timeline + status variants (paid, overpaid, partial, held, …)
-        ├── merchant-payments.js  S3: Ledger (0/1/200 volumes, monthly total, deep-links)
-        ├── merchant-payment-detail.js  S4: Payment detail + timeline + surplus actions
-        └── compliance-case.js    S5: Case queue + detail + action dialog (approve/decline/freeze/request)
-```
+- **No build step.** Classic deferred scripts, no ES modules, no fetch(), no CDN.
+- **Statuses defined once** in `design-system.css` (tokens) and `js/derive.js` (derivation).
+- **Payment status is derived** from transactions by a pure function. Screens never compute status.
+- **Events carry external status only.** No internal reason, risk score, or screening result in any payload.
+- **Self-hosted fonts** (variable woff2, latin subset). No external requests.
 
-### Key design decisions
-
-- **Single store, no framework.** `window.GATE_STORE` is a plain object with `get()`, `set()`, `notify()` (DOM re-render on change). No React, no Vue, no framework. ~2,200 lines of JS total.
-- **Compliance-safe wording (R1.5).** Payers and merchants never see screening results, risk scores, or internal reasons. The store stores `internal: true` on timeline entries; screens filter them by seat. Merchant sees "Payment is above the review threshold" — not "Enhanced due diligence / AML screening".
-- **Design tokens in one file (R1.6).** All colours, spacing, type sizes, radii, shadows live in `design-system.css` as `--*` custom properties. `css/app.css` contains layout rules only. `design-system.html` is a specimen page showing every token.
-- **No external dependencies (R5).** No `fetch()`, no ES modules, no CDN links. Classic `<script defer>` tags only. Works offline, over `file://`.
-- **Self-hosted variable fonts (R2).** Readex Pro (display) + Google Sans Flex (body), single woff2 per family, latin subset. ~170 KB total.
-- **Hash routing.** `#/seat/screen` with optional `?scenario=X&step=N` for deep-linking. The demo bar, router, and store stay in sync.
-
----
-
-## Compliance safety
-
-The prototype enforces a hard rule: **internal compliance data never leaks to payer or merchant screens.**
-
-- Timeline entries carry an `internal: true` flag. Merchant/payer screens filter them out; compliance sees everything.
-- Status labels are translated: `Screening` → `Payment is above the review threshold` (merchant), `Held for review` (payer).
-- The QA check: load H1, switch to merchant, scan the page text for "screening", "risk", "AML", "sanction" → **zero matches**. Switch to compliance → **visible**.
-
----
-
-## File formats and constraints honoured
-
-| Constraint | How it's met |
-|-----------|-------------|
-| R1.3 — One screen = one file | Each screen is a standalone `.js` in `js/screens/`, registered with the router |
-| R1.4 — Real calculated values | All amounts computed from the rate (3.6 AED/USDT) + fee (2.4% AED), verified against the handoff QA table |
-| R1.5 — Compliance-safe wording | Internal timeline entries redacted per seat; status labels translated |
-| R1.6 — Tokens in one file | `design-system.css` is the only source of design token values |
-| R2 — Self-hosted variable fonts | Two woff2 files in `assets/fonts/`, latin subset, `@font-face` in `design-system.css` |
-| R4 — Single token+component file | `design-system.css` (tokens + components); `css/app.css` (layout only) |
-| R5 — No fetch/modules/CDN | Classic `<script defer>`, zero network requests after load |
-| R7 — Compliance screen isolation | Compliance sees internal labels; payer/merchant see safe labels |
-
----
-
-## Design system specimen
-
-Open `design-system.html` for a full token reference: every colour (with contrast ratios), spacing step, type size, radius, shadow, and component variant rendered as a specimen. Useful for design review and token handoff.
-
----
-
-## Browser support
-
-Tested in Chrome and Firefox (desktop). Uses:
-- CSS custom properties, grid, flexbox, `clamp()`
-- `IntersectionObserver` (merchant list pagination)
-- `navigator.clipboard` (copy with fallback)
-- No polyfills needed for modern evergreen browsers.
-
----
-
-## File inventory
+## File structure
 
 ```
-assets/fonts/
-  GoogleSansFlex-Variable.woff2      32 KB (body, variable weight 300–800)
-  ReadexPro-Variable.woff2           136 KB (display, variable weight 400–700)
-css/
-  app.css                            Layout-only (grid, flex, positioning)
-js/
-  app.js                             Bootstrap
-  demo-bar.js                        Demo controls
-  fixtures.js                        Payment/project fixtures
-  router.js                          Hash router
-  scenarios.js                       14 scenario definitions
-  store.js                           State + formatters + toasts
-  statuses.js                        Status mappings
-  strings.js                         All user-facing copy
-  screens/
-    compliance-case.js               S5
-    merchant-payment-detail.js       S4
-    merchant-payments.js             S3
-    payer-checkout.js                S1
-    payer-status.js                  S2
-design-system.css                    Tokens + components
-design-system.html                   Specimen page
-index.html                           Entry point
-README.md                            This file
+index.html          — entry point, script tags
+design-system.css   — tokens + components (R4)
+css/app.css         — layout only (R4)
+js/app.js           — bootstrap
+js/router.js        — route table
+js/store.js         — state, transactions, cases, ledger, events
+js/fixtures.js      — demo data (illustrative)
+js/derive.js        — pure status derivation (R1.1)
+js/strings.js       — all display strings
+js/statuses.js      — status config (Today/Proposed variants)
+js/scenarios.js     — 17 scenario definitions
+js/demo-bar.js      — demo bar, compliance panel, shortcuts
+js/screens/
+  demo-map.js       — scenario cards (3 groups)
+  payer-checkout.js — S1
+  payer-status.js   — S2
+  merchant-payments.js — S3
+  merchant-payment-detail.js — S4
+assets/fonts/       — variable woff2 (latin)
+docs/               — decisions, assumptions, demo script, panel notes, QA
+tests/derive.html   — status derivation tests
 ```
 
-**20 files · ~3,300 lines (JS + CSS + HTML) · ~372 KB total**
+## Hosting
+See [docs/HOSTING.md](docs/HOSTING.md). Works on any static host. No build step. No analytics. No external requests.
+
+## Demo script
+See [docs/demo-script.md](docs/demo-script.md) — 12-minute walkthrough.
