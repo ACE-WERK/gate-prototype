@@ -1,6 +1,10 @@
 /* Gate Prototype — all user-facing strings (R1.5).
  * Compliance-safe wording: payers and merchants never see screening results,
- * risk scores or internal reasons — only merchant-safe reason categories. */
+ * risk scores or internal reasons — only merchant-safe reason categories.
+ *
+ * Phase 3a: Travel Rule, address safety, instalment schedule, on-chain
+ * lifecycle, refund and ledger/event copy added. All times are labelled
+ * GST (UTC+4) by the screens that render them. */
 (function () {
   "use strict";
 
@@ -11,6 +15,9 @@
     demoAddressLabel: "Demo address. Do not send funds.",
     buyerVerified: "Buyer verified",
 
+    /* The demo bar still renders a seat per key. Compliance is a demo-bar
+     * panel in phase 3b, not a seat; removing the key here would print
+     * "undefined" until demo-bar.js changes. */
     seats: { payer: "Payer", merchant: "Merchant", compliance: "Compliance" },
 
     demoBar: {
@@ -58,20 +65,40 @@
       expiryCountdown: "Link expires in {time}",
       noExpiry: "No expiry, pay in instalments to this address",
       kycBadge: "Buyer verified",
-      backToForm: "Change details"
+      backToForm: "Change details",
+      payerDetails: "Payer details",
+      relationshipRequired: "Choose a relationship to the buyer.",
+      sendingFromRequired: "Choose where you are sending from.",
+      sendingFromHint: "This tells Gate what information to collect.",
+      viewStatus: "View payment status",
+      summary: "Your details",
+      buyerAnswer: "Buyer on the sale agreement",
+      buyerYesShort: "Buyer",
+      buyerNoShort: "Paying for the buyer",
+      sendingFromShort: "Sending from"
     },
 
     // S2 Payer status
     status: {
       title: "Payment status",
+      slowChecks: "Checks are taking longer than usual. Nothing is needed from you.",
       timeline: ["Detected", "Checks", "Confirmed"],
+      onchain: {
+        title: "On-chain progress",
+        steps: ["Detected", "Confirming", "Checks", "Converted", "Credited"],
+        confirming: "Confirming ({n} of {total})",
+        elapsed: "Elapsed {time}",
+        awaiting: "Waiting for the first transaction on this payment.",
+        waiting: "GST (UTC+4)"
+      },
       variants: {
         paid: {
           headline: "Payment received",
           receipt: "Receipt",
           amountSent: "Amount sent",
           amountApplied: "Amount applied",
-          time: "Time"
+          time: "Time",
+          credited: "Credited to the merchant"
         },
         partial: {
           headline: "Partially paid",
@@ -82,7 +109,8 @@
         review: {
           headline: "Under review",
           body: "Your payment is being checked. A decision is expected by {deadline}.",
-          whatNext: "You will be contacted if anything is needed."
+          whatNext: "You will be contacted if anything is needed.",
+          slow: "Checks are taking longer than usual. Nothing is needed from you."
         },
         action: {
           headline: "Action needed",
@@ -93,13 +121,16 @@
         },
         overpaid: {
           headline: "Payment received",
-          surplus: "Amount received exceeds the request by {amount}. The surplus will be handled by the merchant."
+          surplus: "Amount received exceeds the request by {amount}. The merchant will apply it to the next instalment or refund it."
         },
         returned: {
           headline: "Payment returned",
           body: "This payment could not be accepted and has been returned to the sending wallet.",
           returned: "Amount returned",
-          fee: "Network fee deducted"
+          fee: "Network fee deducted",
+          sentOwn: "Refund sent to your sending address.",
+          sentTo: "Refund sent to {address}.",
+          rescreening: "The sending address is screened again before the refund is sent."
         },
         frozen: {
           headline: "Payment pending",
@@ -120,10 +151,16 @@
     merchant: {
       paymentsTitle: "Payments",
       tiles: {
-        collected: "Collected this month",
+        available: "Available",
         inReview: "In review",
-        actionNeeded: "Action needed"
+        collected: "Collected this month",
+        availableHint: "Excludes in-review and frozen amounts",
+        inReviewHint: "AED equivalent at the current rate",
+        collectedHint: "Credited this calendar month (GST)"
       },
+      exportCsv: "Export CSV",
+      csvDone: "Exported {rows} rows as CSV",
+      csvEmpty: "Nothing to export",
       table: {
         ref: "Reference",
         customer: "Project / customer",
@@ -139,7 +176,9 @@
       emptyHint: "Waiting for the first payment on this account.",
       openCase: "Open",
       heldCountdown: "Decision due in {time}",
-      overdue: "Overdue"
+      overdue: "Overdue",
+      txCount: "{n} transactions",
+      txSeparator: " · "
     },
 
     // S4 Merchant payment detail
@@ -153,6 +192,16 @@
       shortfall: "Shortfall (within tolerance)",
       surplus: "Surplus",
       timeline: "Activity",
+      paymentDetails: "Payment details",
+      backToPayments: "Back to payments",
+      transactionsTitle: "Transactions",
+      transactionsHint: "Each payment can arrive in several transactions, screened one by one.",
+      noTransactions: "No transactions have arrived yet.",
+      explorer: "View on explorer",
+      explorerTooltip: "Explorer link is illustrative",
+      ledgerTitle: "Ledger breakdown",
+      rateApplied: "Rate applied",
+      rateWaiting: "Not yet applied. Funds convert when released.",
       hold: {
         title: "Payment on hold",
         dueBy: "Decision due by",
@@ -174,15 +223,17 @@
       underpaid: { remaining: "Remaining", topUp: "Copy top-up link", topUpCopied: "Top-up link copied (simulated)" },
       overpaid: {
         surplusLine: "Surplus {amount}",
-        apply: "Apply to next instalment",
+        apply: "Apply surplus to the next instalment",
         refund: "Refund the surplus",
-        applied: "Surplus applied to next instalment",
-        refunded: "Surplus refunded"
+        applied: "Surplus applied to the next instalment",
+        refunded: "Surplus refunded",
+        noNext: "No later instalment on file to apply it to."
       },
       late: { notice: "Late payment matched", detail: "Arrived after the link expired on {expiry}; matched automatically to this checkout." }
     },
 
-    // S5 Compliance case
+    // S5 Compliance case (screen removed in phase 3a; strings kept for the
+    // demo-bar compliance panel in phase 3b).
     compliance: {
       title: "Compliance case",
       queue: "Open holds (by SLA)",
@@ -279,6 +330,7 @@
         company: "The buyer's company",
         other: "Other"
       },
+      needsReview: "A No does not block payment. It routes the transaction to review.",
       sendingFrom: "Sending from",
       exchangeOption: "An exchange account",
       ownWallet: "My own wallet",
@@ -299,6 +351,7 @@
       frozenNeverRefunded: "Frozen funds are never refunded.",
       submit: "Confirm refund address",
       submitted: "Refund address received (simulated)",
+      addressRequired: "Enter the refund address from your own exchange account.",
       screeningNote: "Refunds are sent only to an address that passes screening."
     },
 
@@ -345,10 +398,12 @@
       title: "Events sent to your system",
       subtitle: "The same payloads your integration would receive.",
       signature: "Gate-Signature: demo",
+      toggle: "Show events ({n})",
       payload: "Payload",
       empty: "No events yet.",
       viewOnExplorer: "View on explorer",
       explorerDisabled: "Explorer links are disabled in this prototype.",
+      explorerTooltip: "Explorer link is illustrative",
       copyPayload: "Copy payload"
     },
 
@@ -358,7 +413,41 @@
       network: "Network",
       qrLabel: "QR placeholder (not scannable) · {network}",
       groupsHint: "Shown in groups of four. Check the first and last six characters.",
-      copied: "Copied {asset} address on {network}"
+      copied: "Copied {asset} address on {network}",
+      copiedShort: "Copied {asset} on {network}",
+      copy: "Copy",
+      copiedBtn: "Copied",
+      copyManual: "Copy manually",
+      networkName: { tron: "Tron", ethereum: "Ethereum" },
+      networkLabel: { tron: "TRON", ethereum: "ETHEREUM" }
+    },
+
+    // Instalment schedule (followup §3.8).
+    schedule: {
+      title: "Instalment schedule",
+      subtitle: "Illustrative schedule for this unit.",
+      instalment: "Instalment",
+      dueDate: "Due date",
+      amount: "Amount due",
+      status: "Status",
+      paid: "Paid",
+      current: "Due now",
+      upcoming: "Upcoming",
+      reducedBy: "Reduced by {amount} from an applied surplus",
+      none: "No instalments on file for this unit.",
+      noUnit: "This payment is not linked to a unit."
+    },
+
+    // Ledger breakdown (followup §3.5).
+    ledger: {
+      title: "Ledger breakdown",
+      received: "Received (AED equivalent)",
+      fee: "Gate fee",
+      credited: "Credited to available",
+      inReview: "In review",
+      refunded: "Refunded",
+      frozen: "Frozen",
+      empty: "No ledger entries yet."
     },
 
     // Today versus Proposed (followup §4.3) and time labelling (§3.9).
