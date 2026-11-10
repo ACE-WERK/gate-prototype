@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gate · Design System Specimen</title>
+  <link rel="stylesheet" href="design-system.css">
+  <style>
+    /* Specimen-only scaffolding. Not part of the design system (R4):
+       this page arranges the specimen; app.css and design-system.css hold the real tokens/components. */
+    .spec { max-width: var(--content-max); margin-inline: auto; padding: var(--sp-5); }
+    .spec section { margin-block-end: var(--sp-6); }
+    .spec h2 { border-block-end: 1px solid var(--color-line); padding-block-end: var(--sp-2); }
+    .spec .row { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; margin-block-end: var(--sp-2); }
+    .spec .swatch { width: calc(var(--sp-5) * 2); height: calc(var(--sp-5) * 1.25); border-radius: var(--radius-sm); border: 1px solid var(--color-line); }
+    .spec .code { font-family: ui-monospace, monospace; font-size: var(--fs-xs); color: var(--color-text-muted); }
+    .spec .note { font-size: var(--fs-xs); color: var(--color-text-muted); margin-block-start: var(--sp-2); }
+  </style>
+</head>
+<body>
+  <nav class="app-nav">
+    <span class="brand">Gate <span class="brand-tag">Prototype</span></span>
+    <span class="proto-label">Prototype · illustrative data · Design System</span>
+  </nav>
+  <div class="spec">
+    <h1>Gate Design System</h1>
+    <p class="muted">Every token and component in every state. Tokens sampled from arpdigital.io (see <code>docs/02-design/arp-style-audit.md</code>); components marked <em>extension</em> where the marketing site lacked them.</p>
+
+    <section>
+      <h2>Colour</h2>
+      <h3>Brand</h3>
+      <div class="row"><div class="swatch" style="background:var(--color-ink)"></div><span class="code">--color-ink #0e0e10</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-surface)"></div><span class="code">--color-surface #ffffff</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-surface-alt)"></div><span class="code">--color-surface-alt #f5f5f4</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-line)"></div><span class="code">--color-line #e3e3e1</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-brand)"></div><span class="code">--color-brand #5de382</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-brand-soft)"></div><span class="code">--color-brand-soft #e7f8ec</span></div>
+      <h3>Semantic (extension, WCAG AA)</h3>
+      <div class="row"><div class="swatch" style="background:var(--color-success)"></div><span class="code">success #1f7a45</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-warning)"></div><span class="code">warning #8a5a00</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-danger)"></div><span class="code">danger #b42318</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-info)"></div><span class="code">info #17549a</span></div>
+      <div class="row"><div class="swatch" style="background:var(--color-neutral)"></div><span class="code">neutral #55555e</span></div>
+    </section>
+
+    <section>
+      <h2>Typography</h2>
+      <div style="font-family:var(--font-display);font-weight:var(--fw-bold);font-size:var(--fs-2xl)">Display 40</div>
+      <div style="font-family:var(--font-display);font-weight:var(--fw-bold);font-size:var(--fs-xl)">Display 32</div>
+      <div style="font-family:var(--font-display);font-weight:var(--fw-bold);font-size:var(--fs-lg)">Display 24</div>
+      <div style="font-family:var(--font-body);font-size:var(--fs-base)">Body 16 — Gate Body (Readex Pro, variable)</div>
+      <div style="font-family:var(--font-body);font-size:var(--fs-sm);font-weight:var(--fw-medium)">Label 14 medium</div>
+      <div style="font-family:var(--font-body);font-size:var(--fs-xs);color:var(--color-text-muted)">Caption 12</div>
+      <p class="note">--font-body: Gate Body (Readex Pro variable). --font-display: Gate Display (Google Sans Flex variable). Self-hosted, open-licensed.</p>
+    </section>
+
+    <section>
+      <h2>Buttons</h2>
+      <div class="row">
+        <button class="btn">Default</button>
+        <button class="btn primary">Primary</button>
+        <button class="btn ghost">Ghost</button>
+        <button class="btn success">Success</button>
+        <button class="btn danger">Danger</button>
+        <button class="btn warning">Warning</button>
+        <button class="btn small">Small</button>
+        <button class="btn primary" disabled>Disabled</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Form fields</h2>
+      <div class="field" style="max-width:calc(var(--sp-5) * 9)">
+        <span class="field-label">Payer full name</span>
+        <input class="text-input" placeholder="e.g. Sample Buyer">
+        <span class="field-error"></span>
+      </div>
+      <div class="field" style="max-width:calc(var(--sp-5) * 9)">
+        <span class="field-label">Payer country</span>
+        <select class="select"><option>United Arab Emirates</option><option>United States</option></select>
+        <span class="field-error"></span>
+      </div>
+      <div class="field" style="max-width:calc(var(--sp-5) * 9)">
+        <span class="field-label">Note (required, min 4 chars)</span>
+        <textarea class="textarea" rows="3"></textarea>
+        <span class="field-error">Note is required.</span>
+      </div>
+      <div class="field" style="max-width:calc(var(--sp-5) * 9)">
+        <span class="field-label">Invalid state</span>
+        <input class="text-input invalid" value="missing value">
+        <span class="field-error">This field is required.</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Selectable cards (asset / network)</h2>
+      <div class="selectable-row">
+        <button class="selectable-card selected">USDT</button>
+        <button class="selectable-card">USDC</button>
+      </div>
+      <div class="selectable-row">
+        <button class="selectable-card">Tron (TRC-20)</button>
+        <button class="selectable-card selected">Ethereum (ERC-20)</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Status chips (text label always visible; never colour alone)</h2>
+      <div class="chip-row"><span class="chip tone-success">Credited</span><span class="chip tone-warning">On hold</span><span class="chip tone-danger">Declined &amp; refunded</span><span class="chip tone-info">Checks running</span><span class="chip tone-neutral">Frozen</span></div>
+      <h3>Badge</h3>
+      <div class="row"><span class="badge success">Buyer verified</span></div>
+    </section>
+
+    <section>
+      <h2>Banners</h2>
+      <div class="banner info">Informational message.</div>
+      <div class="banner warning">Warning message — exchange withdrawal fees can cause a shortfall.</div>
+      <div class="banner neutral">Neutral message.</div>
+      <div class="banner success">Success message.</div>
+      <div class="banner danger">Error message.</div>
+    </section>
+
+    <section>
+      <h2>Cards</h2>
+      <div class="card">
+        <div class="card-title">Default card</div>
+        <div class="card-subtitle">Subtitle</div>
+        <p class="muted">Body copy in a card.</p>
+      </div>
+      <div class="card accent"><div class="card-title">Accent (brand border)</div></div>
+      <div class="card internal"><div class="card-title">Internal (info start border)</div></div>
+    </section>
+
+    <section>
+      <h2>Key-value list</h2>
+      <div class="card" style="max-width:calc(var(--sp-5) * 10)">
+        <div class="kv">
+          <div class="kv-row"><span class="kv-k">Requested (fiat)</span><span class="kv-v">AED 500,000.00</span></div>
+          <div class="kv-row"><span class="kv-k">Received (stablecoin)</span><span class="kv-v">136,147.04 USDT</span></div>
+          <div class="kv-row"><span class="kv-k">Gate fee</span><span class="kv-v">AED 5,000.00</span></div>
+          <div class="kv-row"><span class="kv-k">Credited</span><span class="kv-v kv-strong">AED 495,000.00</span></div>
+          <div class="kv-row"><span class="kv-k">Shortfall</span><span class="kv-v kv-warn">25.00 USDT</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Data table (stacks to cards below 768 px)</h2>
+      <div class="card" style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Reference</th><th>Project</th><th>Payer</th><th class="num">Requested</th><th class="num">Received</th><th class="num">Credited</th><th>Status</th><th>Age</th></tr></thead>
+          <tbody>
+            <tr class="row"><td><span class="row-link">RF-8842</span></td><td><span class="cell-wrap">Project Alpha — Unit 1204</span></td><td>Sample Buyer</td><td class="num">AED 500,000.00</td><td class="num">136,147.04</td><td class="num">AED 495,000.00</td><td><span class="chip tone-success">Credited</span></td><td>2 h</td></tr>
+            <tr class="row"><td><span class="row-link">RF-8843</span></td><td><span class="cell-wrap">Project Alpha — Unit 1204</span></td><td>Sample Buyer</td><td class="num">AED 1,200,000.00</td><td class="num">326,752.89</td><td class="num">—</td><td><span class="chip tone-warning">On hold</span></td><td><span class="cell-sub overdue">Due in 4 h</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Empty state</h3>
+      <div class="empty-state">
+        <div class="empty-icon">◇</div>
+        <div class="empty-title">No payments yet</div>
+        <div class="empty-hint">Payments will appear here once the payer sends funds.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Summary tiles</h2>
+      <div class="tiles">
+        <div class="tile"><div class="tile-value">AED 742,500.00</div><div class="tile-label">Collected this month</div></div>
+        <div class="tile"><div class="tile-value">3</div><div class="tile-label">In review</div></div>
+        <div class="tile"><div class="tile-value">1</div><div class="tile-label">Action needed</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Timeline (horizontal)</h2>
+      <div class="timeline">
+        <div class="timeline-item done"><span class="tl-dot"></span><span class="tl-label">Detected</span></div>
+        <div class="timeline-item current"><span class="tl-dot"></span><span class="tl-label">Checks</span></div>
+        <div class="timeline-item"><span class="tl-dot"></span><span class="tl-label">Confirmed</span></div>
+      </div>
+      <h3>Timeline (vertical)</h3>
+      <div class="card" style="max-width:calc(var(--sp-5) * 11.5)">
+        <div class="timeline vertical">
+          <div class="timeline-item"><span class="tl-label">Payment detected</span><span class="tl-time">14:02</span></div>
+          <div class="timeline-item"><span class="tl-label">Checks running</span><span class="tl-time">14:03</span></div>
+          <div class="timeline-item"><span class="tl-label">Flagged for review</span><span class="tl-time">14:05</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Copy field + QR placeholder</h2>
+      <div class="copy-field"><span class="copy-value">TDEMO00000000000000000000000000000</span><button class="btn small ghost">Copy</button></div>
+      <p class="addr-note">Demo address. Do not send funds.</p>
+      <div class="qr-placeholder" style="max-width:calc(var(--sp-5) * 6)">QR</div>
+    </section>
+
+    <section>
+      <h2>Dialog + preview + outcome list</h2>
+      <div class="card">
+        <div class="dialog-title">Approve and release</div>
+        <div class="preview">
+          <div class="preview-title">Preview</div>
+          <div class="preview-box"><div class="preview-label">Merchant sees</div><div class="preview-text">Payment cleared. AED 1,188,000.00 credited.</div></div>
+          <div class="preview-box"><div class="preview-label">Payer sees</div><div class="preview-text">Your payment is complete.</div></div>
+        </div>
+        <ul class="outcome-list"><li>Paid and credited</li><li>Returned to payer</li><li>Frozen, no release</li></ul>
+        <div class="dialog-actions"><button class="btn ghost">Cancel</button><button class="btn primary">Approve</button></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Queue strip (compliance)</h2>
+      <div class="queue-strip">
+        <span class="queue-title">Open holds — sorted by time left</span>
+        <span class="queue-item active"><span class="qi-id">RF-8843</span><span class="qi-time">Due in 4 h</span></span>
+        <span class="queue-item overdue"><span class="qi-id">RF-8841</span><span class="qi-time">Overdue 2 h</span></span>
+        <span class="queue-item"><span class="qi-id">RF-8844</span><span class="qi-time">Due in 18 h</span></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Toast</h2>
+      <div class="row"><span class="toast">Reminder sent to payer</span><span class="toast tone-success">Payment approved</span></div>
+    </section>
+
+    <section>
+      <h2>Demo bar (not product UI)</h2>
+      <div class="demo-bar" style="position:static">
+        <div class="db-head">
+          <button class="db-toggle">Hide demo controls</button>
+          <span class="db-seats">
+            <button class="db-seat active">Payer</button>
+            <button class="db-seat">Merchant</button>
+            <button class="db-seat">Compliance</button>
+          </span>
+        </div>
+        <div class="db-body">
+          <div class="db-row"><span class="db-label">Scenario</span><select class="db-select"><option>H1 — Happy path</option></select></div>
+          <div class="db-row"><span class="db-label">Step</span><span class="db-stepnum">1 of 4</span><button class="db-btn">Back</button><button class="db-btn primary">Next event</button><button class="db-btn">Reset</button></div>
+        </div>
+      </div>
+    </section>
+
+    <p class="note">End of specimen. Layout notes for the five screens at 390 / 768 / 1440 px are in <code>docs/02-design/arp-style-audit.md</code>.</p>
+  </div>
+</body>
+</html>

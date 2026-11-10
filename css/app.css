@@ -1,0 +1,13 @@
+/* Gate Prototype — app.css (R4)
+ * Screen layout ONLY: grids and page arrangement, using design-system tokens.
+ * Defines NO tokens and NO components. */
+
+.app-shell {
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: var(--sp-5);
+  padding-block-end: var(--sp-7);
+}
+.screen {
+  padding-block-start: var(--sp-5);
+}
