@@ -46,6 +46,20 @@
       /* Transaction-level derived status (filled after seeding, below). */
       c.derived = null;
       c.derivedStatus = null;
+      /* Phase 2 scenario/UI flags (transaction-level states that derivation
+       * does not express: slow checks, refund prompt, schedule updates). */
+      c.externalStatus = null;
+      c.checksDelayed = false;
+      c.scheduleStatus = null;
+      c.appliedToPaymentId = null;
+      c.surplusAppliedSc = 0;
+      c.surplusRemainingSc = 0;
+      c.surplusRefunded = false;
+      c.surplusRefundPending = false;
+      c.refundAddressRequired = false;
+      c.refundAddress = null;
+      c.refundAmountSc = null;
+      c.caseOverdue = false;
       return c;
     });
   }
@@ -67,7 +81,13 @@
       ledger: [],
       events: [],
       toasts: [],
-      dialogs: []
+      dialogs: [],
+      /* Phase 2 scenario runtime: which payment artifacts have been rebuilt
+       * for the current scenario, and how many status-bearing events have
+       * been replayed (deep links and Back replay from zero). */
+      _scenarioFor: null,
+      _scenarioCursor: 0,
+      _scenarioPrepared: {}
     };
     seedTransactions();
     /* Seed a little history so the merchant list is never empty by default. */
@@ -246,15 +266,418 @@
     if (applyStatus) {
       var mapped = LEGACY_STATUS[d.status];
       if (mapped) p.status = mapped;
+      p.externalStatus = d.status;
       p.receivedSc = totalSc(p.id);
       p.creditedAED = d.creditedAED;
       p.shortfall = d.shortfall;
+      /* A shortfall accepted inside the tolerance still derives "paid"; keep
+       * the visible shortfall so E6 can show it. */
+      if (d.status === "paid" && d.clearedSc < p.requestedSc - 0.005) {
+        p.shortfall = F.math.round2(p.requestedSc - d.clearedSc);
+      }
       p.surplus = d.surplus;
     }
     return d;
   }
 
   function paymentForTx(tx) { return tx && tx.paymentId ? byId(tx.paymentId) : null; }
+
+  /* --- scenario runtime (phase 2) -----------------------------------------
+   * Scenario events are declarative programs (`ops`) applied to the
+   * transaction model. The demo bar still calls setPaymentStatus per event;
+   * the store maps that call to the next status-bearing event in the current
+   * scenario, which also works when a deep link replays events from zero.
+   */
+
+  function nextScenarioEvent() {
+    if (!state) return null;
+    if (state._scenarioFor !== state.scenarioId) {
+      state._scenarioFor = state.scenarioId;
+      state._scenarioCursor = 0;
+      state._scenarioPrepared = {};
+    }
+    var sc = window.GATE_SCENARIOS && window.GATE_SCENARIOS.byId(state.scenarioId);
+    if (!sc) return null;
+    var list = [];
+    for (var i = 0; i < sc.events.length; i++) {
+      if (sc.events[i].status != null) list.push(sc.events[i]);
+    }
+    var ev = list[state._scenarioCursor] || null;
+    state._scenarioCursor += 1;
+    return ev;
+  }
+
+  function feePctFor(p) {
+    return p.merchantId === "M-002" ? F.fees.broker : F.fees.realEstate;
+  }
+
+  function assetUsdFor(p) {
+    return p.asset === "USDC" ? F.rates.USDC_PER_USD : F.rates.USDT_PER_USD;
+  }
+
+  function grossAED(p, amountSc) {
+    return F.math.round2((Number(amountSc) || 0) * F.rates.AED_PER_USD * assetUsdFor(p));
+  }
+
+  function creditCapAED(p) {
+    return F.math.round2(p.requestedFiatAED * (1 - feePctFor(p)));
+  }
+
+  function availableSum(paymentId) {
+    var n = 0;
+    var list = state.ledger || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].paymentId === paymentId && list[i].type === "available") n += Number(list[i].amountAED) || 0;
+    }
+    return F.math.round2(n);
+  }
+
+  function hasLedger(paymentId, txId, type) {
+    var list = state.ledger || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].paymentId === paymentId && list[i].txId === txId && list[i].type === type) return true;
+    }
+    return false;
+  }
+
+  function removeLedger(paymentId, txId, type) {
+    state.ledger = (state.ledger || []).filter(function (l) {
+      return !(l.paymentId === paymentId && l.txId === txId && l.type === type);
+    });
+  }
+
+  function _addLedger(paymentId, txId, type, amountAED, extra) {
+    var e = {
+      id: "L-" + nextSuffix(state.ledger || [], "L-"),
+      paymentId: paymentId,
+      txId: txId || null,
+      type: type || "available",
+      amountAED: F.math.round2(Number(amountAED) || 0)
+    };
+    if (extra) for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) e[k] = extra[k];
+    state.ledger.push(e);
+    return e;
+  }
+
+  function _emitEvent(paymentId, type, amounts, status) {
+    var p = byId(paymentId);
+    var id = nextEventId();
+    var at = ts();
+    var payload = {
+      id: "evt_" + id.replace(/^EV-/, ""),
+      type: type,
+      created_at: at,
+      payment_reference: p ? p.id : paymentId,
+      amounts: amounts ? clone(amounts) : {},
+      status: status || (p ? (p.externalStatus || p.derivedStatus || p.status) : null),
+      idempotency_key: "idem_" + (p ? p.id : paymentId) + "_" + type + "_" + id.replace(/^EV-/, "")
+    };
+    var ev = { id: id, type: type, paymentId: paymentId, time: at, payload: payload };
+    state.events.push(ev);
+    return ev;
+  }
+
+  /* A scenario replays one payment from its beginning: drop the reference
+   * dataset's transactions, cases, ledger and events for that payment once,
+   * so sending 136,147.04 does not stack on a seeded cleared transaction. */
+  function preparePayment(paymentId) {
+    if (!state._scenarioPrepared) state._scenarioPrepared = {};
+    if (state._scenarioPrepared[paymentId]) return;
+    state._scenarioPrepared[paymentId] = true;
+    var p = byId(paymentId);
+    if (!p) return;
+    var txIds = {};
+    state.transactions = (state.transactions || []).filter(function (t) {
+      if (t.paymentId === paymentId) { txIds[t.id] = true; return false; }
+      return true;
+    });
+    state.cases = (state.cases || []).filter(function (c) { return !txIds[c.txId]; });
+    state.ledger = (state.ledger || []).filter(function (l) { return l.paymentId !== paymentId; });
+    state.events = (state.events || []).filter(function (e) { return e.paymentId !== paymentId; });
+
+    p.status = "pending";
+    p.timeline = [];
+    p.receivedSc = 0;
+    p.creditedAED = 0;
+    p.feeAED = F.math.fee(p.requestedFiatAED, p.merchantId === "M-002" ? "broker" : "realEstate");
+    p.shortfall = 0;
+    p.surplus = 0;
+    p.flaggedAt = null;
+    p.decisionDueBy = null;
+    p.reasonCategory = null;
+    p.internalReason = null;
+    p.note = null;
+    p.infoRequested = null;
+    p.infoProvided = false;
+    p.lateMatched = false;
+    p.expiredAt = null;
+    p.poolReleased = false;
+    p.receivedNetwork = null;
+    p.externalStatus = null;
+    p.checksDelayed = false;
+    p.scheduleStatus = null;
+    p.appliedToPaymentId = null;
+    p.surplusAppliedSc = 0;
+    p.surplusRemainingSc = 0;
+    p.surplusRefunded = false;
+    p.surplusRefundPending = false;
+    p.refundAddressRequired = false;
+    p.refundAddress = null;
+    p.refundAmountSc = null;
+    p.caseOverdue = false;
+  }
+
+  function defaultConfirmations(t) {
+    return String(t.network || "").indexOf("TRC-20") === 0 ? F.confirmationCounts.tron : F.confirmationCounts.ethereum;
+  }
+
+  function _addTx(paymentId, spec) {
+    var p = byId(paymentId);
+    if (!p || !spec) return null;
+    preparePayment(paymentId);
+    var t = spec.id ? findTx(spec.id) : null;
+    if (!t) {
+      t = { id: spec.id || nextTxId(paymentId), paymentId: paymentId };
+      state.transactions.push(t);
+    }
+    for (var k in spec) {
+      if (k === "op" || k === "id" || k === "paymentId") continue;
+      if (Object.prototype.hasOwnProperty.call(spec, k)) t[k] = spec[k];
+    }
+    if (t.amountSc == null) t.amountSc = 0;
+    if (!t.network) t.network = p.network;
+    if (!t.asset) t.asset = p.asset;
+    if (t.walletType !== "exchange" && t.walletType !== "own") t.walletType = "own";
+    if (!t.senderAddr) t.senderAddr = t.walletType === "exchange" ? F.addresses.exchangeTron : (String(t.network).indexOf("TRC-20") === 0 ? F.addresses.tron : F.addresses.eth);
+    if (t.confirmations == null) t.confirmations = t.status === "cleared" ? defaultConfirmations(t) : 0;
+    if (!t.screeningState) {
+      t.screeningState = t.status === "cleared" ? "clear" : (t.status === "in_review" || t.status === "frozen" ? "in_review" : "pending");
+    }
+    if (t.caseId === undefined) t.caseId = null;
+    if (!t.hash) t.hash = "0xdemo" + String(paymentId).replace(/\D/g, "") + "0000000000000000000000000000000000".slice(0, 30);
+    syncDerived(p, true);
+    return t;
+  }
+
+  function _txStatus(txId, status, extra) {
+    var t = findTx(txId);
+    if (!t) return null;
+    t.status = status;
+    if (extra) {
+      if (extra.screeningState) t.screeningState = extra.screeningState;
+      if (extra.confirmations != null) t.confirmations = Number(extra.confirmations) || 0;
+      if (extra.network) t.network = extra.network;
+    }
+    syncDerived(paymentForTx(t), true);
+    return t;
+  }
+
+  function _holdTx(p, txId) {
+    var t = findTx(txId);
+    if (!t) return null;
+    t.status = "in_review";
+    t.screeningState = "in_review";
+    if (!hasLedger(p.id, t.id, "in_review")) _addLedger(p.id, t.id, "in_review", grossAED(p, t.amountSc));
+    syncDerived(p, true);
+    return t;
+  }
+
+  function _creditTx(p, txId) {
+    var t = findTx(txId);
+    if (!t) return null;
+    removeLedger(p.id, t.id, "in_review");
+    var gross = grossAED(p, t.amountSc);
+    var fp = feePctFor(p);
+    var fee = F.math.round2(gross * fp);
+    var net = F.math.round2(gross - fee);
+    var cap = creditCapAED(p);
+    var already = availableSum(p.id);
+    if (already >= cap - 0.005) {
+      /* Entirely surplus: no fee and nothing more credited. */
+      fee = 0;
+      net = 0;
+    } else if (already + net > cap + 0.005) {
+      /* Overpayment: credit the request, charge the request's fee; the
+       * remainder is surplus and is refunded/applied separately. */
+      net = F.math.round2(cap - already);
+      fee = F.math.round2(p.requestedFiatAED * fp);
+    }
+    t.status = "cleared";
+    t.screeningState = "clear";
+    if (!t.confirmations) t.confirmations = defaultConfirmations(t);
+    if (fee > 0) _addLedger(p.id, t.id, "fee", fee);
+    if (net > 0) _addLedger(p.id, t.id, "available", net);
+    syncDerived(p, true);
+    return t;
+  }
+
+  function _freezeTx(p, txId) {
+    var t = findTx(txId);
+    if (!t) return null;
+    removeLedger(p.id, t.id, "in_review");
+    t.status = "frozen";
+    t.screeningState = "in_review";
+    if (!hasLedger(p.id, t.id, "frozen")) _addLedger(p.id, t.id, "frozen", grossAED(p, t.amountSc));
+    syncDerived(p, true);
+    return t;
+  }
+
+  function _refundTx(p, txId, amountSc, op) {
+    var t = findTx(txId);
+    if (!t) return null;
+    removeLedger(p.id, t.id, "in_review");
+    t.status = "refunded";
+    t.screeningState = "clear";
+    var refundSc = F.math.round2(Number(amountSc) || 0);
+    p.refundAmountSc = refundSc;
+    _addLedger(p.id, t.id, "refund", grossAED(p, refundSc), { amountSc: refundSc, asset: p.asset });
+    syncDerived(p, true);
+    return t;
+  }
+
+  function _caseForTx(txId) {
+    var t = findTx(txId);
+    if (!t || !t.caseId) return null;
+    return getCase(t.caseId);
+  }
+
+  function _ensureCase(txId, spec) {
+    var t = findTx(txId);
+    if (!t) return null;
+    var c = t.caseId ? getCase(t.caseId) : null;
+    if (!c) {
+      c = {
+        id: "C-" + nextSuffix(state.cases || [], "C-"),
+        txId: txId,
+        internalReason: spec.internalReason || null,
+        externalStatus: spec.externalStatus || "in_review",
+        infoRequested: spec.infoRequested || null,
+        deadline: new Date(state.clock.getTime() + (spec.deadlineHours != null ? spec.deadlineHours : (F.rules.holdDeadlineHours || 24)) * 3600000).toISOString(),
+        decisionLog: []
+      };
+      state.cases.push(c);
+      t.caseId = c.id;
+    } else {
+      if (spec.internalReason) c.internalReason = spec.internalReason;
+      if (spec.externalStatus) c.externalStatus = spec.externalStatus;
+      if (spec.infoRequested != null) c.infoRequested = spec.infoRequested;
+    }
+    return c;
+  }
+
+  function _requestInfo(txId, info) {
+    var c = _caseForTx(txId);
+    if (c) {
+      c.externalStatus = "information_requested";
+      c.infoRequested = info || null;
+    }
+    var p = paymentForTx(findTx(txId));
+    if (p) p.infoRequested = info || null;
+    return c;
+  }
+
+  function _decideCase(txId, action, reason, note) {
+    var c = _caseForTx(txId);
+    if (!c) return null;
+    var key = String(action || "").toLowerCase().replace(/[^a-z]+/g, "_").replace(/^_+|_+$/g, "");
+    var at = ts();
+    c.decisionLog.push({ at: at, action: action || null, internalReason: reason || null, note: note || null });
+    c.decidedAt = at;
+    if (CASE_STATUS[key]) c.externalStatus = CASE_STATUS[key];
+    return c;
+  }
+
+  function _overdue(txId) {
+    var c = _caseForTx(txId);
+    if (!c) return null;
+    c.overdue = true;
+    c.deadline = new Date(state.clock.getTime() - 3600000).toISOString();
+    c.externalStatus = "overdue";
+    var p = paymentForTx(findTx(txId));
+    if (p) p.caseOverdue = true;
+    return c;
+  }
+
+  function applyScenarioStatus(p, op) {
+    p.status = op.value;
+    if (op.externalStatus) p.externalStatus = op.externalStatus;
+    if (op.scheduleStatus) p.scheduleStatus = op.scheduleStatus;
+    if (op.category) { p.reasonCategory = op.category; p.flaggedAt = ts(); }
+    if (op.deadlineHours != null) p.decisionDueBy = new Date(state.clock.getTime() + op.deadlineHours * 3600000).toISOString();
+    if (op.internal) p.internalReason = op.internal;
+    if (op.note != null) p.note = op.note;
+    if (op.info) p.infoRequested = op.info;
+    if (op.infoProvided) p.infoProvided = true;
+    if (op.late) p.lateMatched = true;
+    if (op.wrongNetwork) p.receivedNetwork = op.wrongNetwork;
+    if (op.expired) { p.expiredAt = ts(); p.poolReleased = true; }
+    if (op.checksDelayed != null) p.checksDelayed = op.checksDelayed;
+    if (op.merchantBanner != null) p.merchantBanner = op.merchantBanner;
+    if (op.refundAddressRequired != null) p.refundAddressRequired = op.refundAddressRequired;
+    if (op.refundAddress != null) p.refundAddress = op.refundAddress;
+    if (op.surplusRefunded != null) p.surplusRefunded = op.surplusRefunded;
+    if (op.surplusRefundPending != null) p.surplusRefundPending = op.surplusRefundPending;
+    if (op.surplusAppliedSc != null) p.surplusAppliedSc = op.surplusAppliedSc;
+    if (op.surplusRemainingSc != null) p.surplusRemainingSc = op.surplusRemainingSc;
+
+    var internalText = op.text || (window.GATE_STATUSES ? window.GATE_STATUSES.label(op.value, "compliance") : op.value);
+    var externalText = op.externalText || (window.GATE_STATUSES ? window.GATE_STATUSES.label(op.value, "merchant") : op.value);
+    p.timeline.push({ ts: ts(), seat: "system", text: internalText, internal: true });
+    p.timeline.push({ ts: ts(), seat: "system", text: externalText, internal: false });
+  }
+
+  /* E17: the duplicate payment is applied to the next instalment. The target
+   * payment gets a real cleared transaction, fee/available ledger and event;
+   * the source keeps the mechanical surplus and records what was applied. */
+  function _applyToInstalment(op) {
+    var from = byId(op.from);
+    var to = byId(op.to);
+    if (!to) return;
+    preparePayment(to.id);
+    _addTx(to.id, { id: op.txId, amountSc: op.amountSc, status: "cleared", screeningState: "clear", walletType: "own" });
+    _creditTx(to, op.txId);
+    _emitEvent(to.id, "payment.credited", { received: usdtString(op.amountSc), credited: "AED " + F.math.round2(creditCapAED(to)).toFixed(2) }, "paid");
+    to.scheduleStatus = "paid";
+    to.appliedToPaymentId = from ? from.id : null;
+    if (from) {
+      from.surplusAppliedSc = op.amountSc;
+      var ds = from.derived ? from.derived.surplus : 0;
+      from.surplusRemainingSc = F.math.round2(Math.max(0, ds - op.amountSc));
+    }
+  }
+
+  /* Scenario amounts in event payloads are display strings. */
+  function usdtString(n) {
+    var parts = Number(n).toFixed(2).split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".") + " USDT";
+  }
+
+  function applyScenarioOps(p, ev) {
+    preparePayment(p.id);
+    var ops = ev.ops || [];
+    for (var i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      switch (o.op) {
+        case "tx": _addTx(p.id, o); break;
+        case "txStatus": _txStatus(o.id, o.status, o); break;
+        case "hold": _holdTx(p, o.id); break;
+        case "credit": _creditTx(p, o.id); break;
+        case "freeze": _freezeTx(p, o.id); break;
+        case "refund": _refundTx(p, o.id, o.amountSc, o); break;
+        case "case": _ensureCase(o.txId, o); break;
+        case "requestInfo": _requestInfo(o.txId, o.info); break;
+        case "decideCase": _decideCase(o.txId, o.action, o.internalReason, o.note); break;
+        case "overdue": _overdue(o.txId); break;
+        case "ledger": _addLedger(p.id, o.txId, o.type, o.amountAED, o.extra); break;
+        case "event": _emitEvent(p.id, o.name, o.amounts, o.status); break;
+        case "status": applyScenarioStatus(p, o); break;
+        case "applyToInstalment": _applyToInstalment(o); break;
+      }
+    }
+    notify();
+  }
+
 
   function nextSuffix(list, prefix) {
     var max = 0;
@@ -406,29 +829,32 @@
    * internal reason, risk score or screening result. */
   function addEvent(paymentId, type, amounts, status) {
     if (!state) return null;
-    var p = byId(paymentId);
-    var id = nextEventId();
-    var at = ts();
-    var payload = {
-      id: "evt_" + id.replace(/^EV-/, ""),
-      type: type,
-      created_at: at,
-      payment_reference: p ? p.id : paymentId,
-      amounts: amounts ? clone(amounts) : {},
-      status: status || (p ? (p.derivedStatus || p.status) : null),
-      idempotency_key: "idem_" + (p ? p.id : paymentId) + "_" + type + "_" + id.replace(/^EV-/, "")
-    };
-    var ev = { id: id, type: type, paymentId: paymentId, time: at, payload: payload };
-    state.events.push(ev);
+    var ev = _emitEvent(paymentId, type, amounts, status);
     notify();
     return ev;
   }
 
   /* --- payment mutations --- */
   function setPaymentStatus(id, status, extra, force) {
-    fx();
     var p = byId(id);
     if (!p) return;
+
+    /* Scenario stepping (demo bar, deep links, Back replay) is applied to the
+     * transaction model. Each status-bearing event carries its own ops; if it
+     * does not, the legacy payment-level path below still runs. */
+    if (force && state.scenarioId) {
+      var ev = nextScenarioEvent();
+      if (ev && ev.ops && ev.ops.length) {
+        applyScenarioOps(p, ev);
+        return;
+      }
+    }
+
+    applyLegacyStatus(p, status, extra, force);
+  }
+
+  function applyLegacyStatus(p, status, extra, force) {
+    fx();
     var from = p.status;
     if (from !== status && !S.canTransition(from, status)) {
       if (!force) {
