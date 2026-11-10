@@ -791,6 +791,22 @@ body.annotations-on .annotation-layer { display: block; }
   box-shadow: var(--shadow-lg);
   pointer-events: auto;
 }
+.annotation-note { padding-inline-end: var(--sp-5); }
+.annotation-note-title { font-weight: var(--fw-bold); margin-block-end: var(--sp-1); }
+.annotation-note-text { font-size: var(--fs-xs); }
+.annotation-close {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 4px;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: none;
+  border: 0;
+  color: #fff;
+  font-size: var(--fs-md);
+  line-height: 1;
+  cursor: pointer;
+}
 
 @media (max-width: 1024px) {
   .dm-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }

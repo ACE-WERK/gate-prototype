@@ -25,7 +25,7 @@
     if (isNaN(d.getTime())) return "—";
     d = new Date(d.getTime() + 4 * 3600000); // GST = UTC+4
     return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear() +
-      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST";
+      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST (UTC+4)";
   }
   function fmtDate(value) {
     var d = value instanceof Date ? value : new Date(value);
@@ -63,8 +63,12 @@
     in_review: "warning", partially_credited_in_review: "warning", frozen: "neutral"
   };
   function merchantStatus(p) {
+    if (G().viewMode() === "today") {
+      var cfg = window.GATE_STATUSES.config[p.status];
+      return { label: G().statusLabel(p.status, "merchant"), tone: cfg ? cfg.tone : "neutral" };
+    }
     var ext = p.externalStatus || p.derivedStatus;
-    var label = ext && S().derivedStatus[ext] ? S().derivedStatus[ext].merchant : window.GATE_STATUSES.label(p.status, "merchant");
+    var label = ext && S().derivedStatus[ext] ? S().derivedStatus[ext].merchant : G().statusLabel(p.status, "merchant");
     var tone = ext && DERIVED_TONE[ext] ? DERIVED_TONE[ext] : (window.GATE_STATUSES.config[p.status] ? window.GATE_STATUSES.config[p.status].tone : "neutral");
     return { label: label, tone: tone };
   }
@@ -113,6 +117,11 @@
     var rate = F().rates.AED_PER_USD;
     var assetUsd = p.asset === "USDC" ? F().rates.USDC_PER_USD : F().rates.USDT_PER_USD;
     var status = merchantStatus(p);
+    var pdV = G().variant("payerDetails");
+    var heldV = G().variant("held");
+    var partV = G().variant("partial");
+    var overV = G().variant("overpaid");
+    var lateV = G().variant("late");
 
     app.appendChild(recoveryLink(d.backToPayments, "#/merchant/payments"));
     app.appendChild(el("h1", "screen-title", "Payment " + p.id));
@@ -139,14 +148,56 @@
     sum.appendChild(kv(d.rate, "1 " + p.asset + " = " + assetUsd.toFixed(2) + " USD · " + rate.toFixed(4) + " AED/USD"));
     sum.appendChild(kv(d.fee, G().fmtAED(feeAED) + " (" + (seg === "broker" ? "0.25" : "1.00") + "%)"));
     sum.appendChild(kv(d.credited, G().fmtAED(availableAED), "kv-strong"));
-    if (p.shortfall > 0) sum.appendChild(kv(d.shortfall, G().fmtSC(p.shortfall, p.asset), "kv-warn"));
+    if (p.shortfall > 0 && partV.showRemaining) sum.appendChild(kv(d.shortfall, G().fmtSC(p.shortfall, p.asset), "kv-warn"));
     var surplusLeft = round2((Number(p.surplus) || 0) - (Number(p.surplusAppliedSc) || 0));
-    if (surplusLeft > 0) sum.appendChild(kv(d.surplus, G().fmtSC(surplusLeft, p.asset), "kv-warn"));
+    if (surplusLeft > 0 && overV.showSurplus) sum.appendChild(kv(d.surplus, G().fmtSC(surplusLeft, p.asset), "kv-warn"));
 
     var creditedEv = null;
     evs.forEach(function (e) { if (e.type === "payment.credited") creditedEv = e.time || e.payload.created_at; });
     sum.appendChild(kv(d.rateApplied, creditedEv ? fmtGST(creditedEv) : d.rateWaiting));
     app.appendChild(sum);
+
+    /* Key state panels sit directly under the summary so they are visible at
+     * 1440x900 without scrolling; the long reference cards follow. */
+    if (p.lateMatched) {
+      var late = el("div", lateV.matched ? "banner info" : "banner warning");
+      if (lateV.matched) {
+        late.appendChild(el("strong", "", d.late.notice + ". "));
+        late.appendChild(el("span", "", d.late.detail.replace("{expiry}", p.expiredAt ? fmtGST(p.expiredAt) : "—")));
+      } else {
+        late.appendChild(el("strong", "", d.late.unallocated + ". "));
+        late.appendChild(el("span", "", d.late.unallocatedDetail));
+      }
+      app.appendChild(late);
+    }
+
+    if (p.status === "held" || p.status === "overdueHeld" || p.status === "action" || p.status === "frozen") {
+      app.appendChild(holdPanel(p));
+    }
+
+    if (overV.showSurplus && (surplusLeft > 0 || (p.status === "overpaid" && !p.surplusRefunded))) {
+      app.appendChild(surplusPanel(surplusLeft));
+    }
+
+    if (partV.showRemaining && p.status === "partial" && p.derivedStatus !== "partially_credited_in_review") {
+      var up = el("div", "card accent");
+      up.appendChild(el("h3", "card-subtitle", d.underpaid.remaining + ": " + G().fmtSC(Math.max(0, p.requestedSc - receivedSc), p.asset)));
+      var btn = el("button", "btn primary", d.underpaid.topUp);
+      btn.type = "button";
+      btn.addEventListener("click", function () {
+        var copied = function () {
+          btn.textContent = d.underpaid.topUpCopied;
+          setTimeout(function () { btn.textContent = d.underpaid.topUp; }, 1800);
+        };
+        var manual = function () { btn.textContent = "Copy manually"; setTimeout(function () { btn.textContent = d.underpaid.topUp; }, 1800); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try { navigator.clipboard.writeText("gate://topup/" + p.id).then(copied).catch(manual); }
+          catch (err) { manual(); }
+        } else { manual(); }
+      });
+      up.appendChild(btn);
+      app.appendChild(up);
+    }
 
     /* ---------- Who paid (merchant-safe fields only) ---------- */
     var meta = el("div", "card");
@@ -155,19 +206,24 @@
     meta.appendChild(kv("Unit / instalment", parsed ? parsed.unit + ", " + parsed.n + " of " + parsed.total : p.label));
     meta.appendChild(kv("Payer", p.payerName || (payerFixture ? payerFixture.name : "—")));
     meta.appendChild(kv("Country", p.payerCountry || (payerFixture ? payerFixture.country : "—")));
-    if (p.buyerAnswer) {
+    if (p.buyerAnswer && pdV.collected) {
       meta.appendChild(kv("Buyer on the sale agreement", p.buyerAnswer === "no" ? "No — paying for the buyer" : "Yes"));
       if (p.buyerAnswer === "no" && p.payerRelationship) {
         meta.appendChild(kv("Relationship", S().travelRule.relationships[p.payerRelationship] || p.payerRelationship));
       }
+    } else if (!pdV.collected) {
+      meta.appendChild(kv("Buyer on the sale agreement", pdV.value));
     }
     if (txs.length) {
-      meta.appendChild(kv("Sent from", txs[0].walletType === "exchange" ? S().transactions.wallet.exchange : S().transactions.wallet.own));
+      meta.appendChild(kv("Sent from", pdV.collected
+        ? (txs[0].walletType === "exchange" ? S().transactions.wallet.exchange : S().transactions.wallet.own)
+        : pdV.value));
     }
     app.appendChild(meta);
 
     /* ---------- Transactions ---------- */
     var txCard = el("div", "card");
+    txCard.dataset.anchor = "s4-transactions";
     txCard.appendChild(el("h2", "card-title", d.transactionsTitle));
     txCard.appendChild(el("div", "muted", d.transactionsHint));
     if (!txs.length) {
@@ -192,47 +248,9 @@
     }
     app.appendChild(led);
 
-    /* ---------- Surplus: apply to the next instalment ---------- */
-    if (surplusLeft > 0 || (p.status === "overpaid" && !p.surplusRefunded)) {
-      app.appendChild(surplusPanel(surplusLeft));
-    }
-
     /* ---------- Instalment schedule ---------- */
     var sch = buildSchedule(p);
     if (sch) app.appendChild(scheduleCard(sch, p.asset));
-
-    /* ---------- Underpaid ---------- */
-    if (p.status === "partial" && p.derivedStatus !== "partially_credited_in_review") {
-      var up = el("div", "card accent");
-      up.appendChild(el("h3", "card-subtitle", d.underpaid.remaining + ": " + G().fmtSC(Math.max(0, p.requestedSc - receivedSc), p.asset)));
-      var btn = el("button", "btn primary", d.underpaid.topUp);
-      btn.type = "button";
-      btn.addEventListener("click", function () {
-        var copied = function () {
-          btn.textContent = d.underpaid.topUpCopied;
-          setTimeout(function () { btn.textContent = d.underpaid.topUp; }, 1800);
-        };
-        var manual = function () { btn.textContent = "Copy manually"; setTimeout(function () { btn.textContent = d.underpaid.topUp; }, 1800); };
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          try { navigator.clipboard.writeText("gate://topup/" + p.id).then(copied).catch(manual); }
-          catch (err) { manual(); }
-        } else { manual(); }
-      });
-      up.appendChild(btn);
-      app.appendChild(up);
-    }
-
-    if (p.lateMatched) {
-      var late = el("div", "banner info");
-      late.appendChild(el("strong", "", d.late.notice + ". "));
-      late.appendChild(el("span", "", d.late.detail.replace("{expiry}", p.expiredAt ? fmtGST(p.expiredAt) : "—")));
-      app.appendChild(late);
-    }
-
-    /* ---------- Hold panel ---------- */
-    if (p.status === "held" || p.status === "overdueHeld" || p.status === "action" || p.status === "frozen") {
-      app.appendChild(holdPanel(p));
-    }
 
     /* ---------- Events sent to your system ---------- */
     app.appendChild(eventsPanel(evs));
@@ -362,6 +380,13 @@
 
     function holdPanel(target) {
       var h = el("div", "card hold-panel");
+      h.dataset.anchor = "s4-hold";
+      if (!heldV.showDeadline) {
+        h.appendChild(el("h2", "card-title", d.hold.todayTitle));
+        h.appendChild(kv("Status", d.hold.todayStatus));
+        h.appendChild(el("p", "muted", heldV.merchantNote));
+        return h;
+      }
       h.appendChild(el("h2", "card-title", d.hold.title));
       if (target.status === "overdueHeld") {
         h.appendChild(el("div", "banner warning", d.hold.escalation));
@@ -400,6 +425,7 @@
 
     function eventsPanel(list) {
       var card = el("div", "card");
+      card.dataset.anchor = "s4-events";
       card.appendChild(el("h2", "card-title", S().events.title));
       card.appendChild(el("div", "muted", S().events.subtitle));
 

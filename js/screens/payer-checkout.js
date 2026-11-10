@@ -42,7 +42,7 @@
     var d = gstParts(value);
     if (!d) return "—";
     return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear() +
-      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST";
+      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST (UTC+4)";
   }
 
   function netKey(network) {
@@ -156,9 +156,12 @@
     app.appendChild(card);
 
     /* ---------- Step 1: details + Travel Rule ---------- */
+    var pd = G().variant("payerDetails");
     var formCard = el("div", "card");
     formCard.id = "checkout-form";
+    formCard.dataset.anchor = "s1-payer-details";
     formCard.appendChild(el("h2", "card-title", tr.heading));
+    if (pd && !pd.collected) formCard.appendChild(el("div", "banner neutral", pd.note));
 
     var nameErr = el("div", "field-error");
     nameErr.id = "name-err";
@@ -427,6 +430,7 @@
       details.appendChild(el("h2", "card-title", c.sendTo));
       var netk = netKey(p.network);
       var block = el("div", "address-block");
+      block.dataset.anchor = "s1-address";
       block.style.display = "flex";
       block.style.alignItems = "center";
       block.style.gap = "var(--sp-3)";

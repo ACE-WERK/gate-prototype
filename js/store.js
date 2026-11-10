@@ -75,6 +75,10 @@
       clock: new Date(BASE_NOW.getTime()),
       volume: 1,          // merchant list volume: 0 | 1 | 200
       split: false,
+      /* Phase 4: the prototype opens on "Proposed" (the thing being pitched);
+       * `T` switches to "Today" for the before/after moment. */
+      viewMode: "proposed",
+      annotations: false,
       payments: deepClonePayments(),
       transactions: [],
       cases: [],
@@ -150,8 +154,41 @@
 
   function fmtClock(d) {
     var p = function (n) { return (n < 10 ? "0" : "") + n; };
-    return d.getUTCDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] +
-      " " + p(d.getUTCHours()) + ":" + p(d.getUTCMinutes());
+    /* The demo clock is shown in Gulf Standard Time, like every other time
+     * in the prototype (followup §3.9). */
+    var g = new Date(d.getTime() + 4 * 3600000);
+    return g.getUTCDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][g.getUTCMonth()] +
+      " " + p(g.getUTCHours()) + ":" + p(g.getUTCMinutes()) + " GST (UTC+4)";
+  }
+
+  /* --- working-day deadlines (followup §3.9) ----------------------------
+   * The 24-hour hold deadline counts working days only. The week is a fixture
+   * per entity: UAE Mon-Fri, Bahrain Sun-Thu. The demo's merchant ids map to
+   * entities here because fixtures.js is outside this phase's write guard. */
+  var DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  function entityForMerchant(merchantId) {
+    return merchantId === "M-002" ? "bahrain" : "uae";
+  }
+
+  function gstDayName(date) {
+    return DAY_NAMES[new Date(date.getTime() + 4 * 3600000).getUTCDay()];
+  }
+
+  function isWorkingDay(date, entity) {
+    var week = (F.workingWeek && (F.workingWeek[entity] || F.workingWeek.uae)) || ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    return week.indexOf(gstDayName(date)) !== -1;
+  }
+
+  /* A 24-working-hour deadline is the same time on the next working day. */
+  function addWorkingHours(from, hours, entity) {
+    var d = new Date(from.getTime() + (Number(hours) || 0) * 3600000);
+    var guard = 0;
+    while (!isWorkingDay(d, entity) && guard < 14) {
+      d = new Date(d.getTime() + 86400000);
+      guard++;
+    }
+    return d;
   }
 
   /* Money formatters: thousands separators, tabular-nums in CSS. */
@@ -268,7 +305,9 @@
       if (mapped) p.status = mapped;
       p.externalStatus = d.status;
       p.receivedSc = totalSc(p.id);
-      p.creditedAED = d.creditedAED;
+      /* derive.js rounds the per-transaction credit cap; clamp to the payment
+       * cap so credited never exceeds request - fee by a rounding cent. */
+      p.creditedAED = F.math.round2(Math.min(Number(d.creditedAED) || 0, creditCapAED(p)));
       p.shortfall = d.shortfall;
       /* A shortfall accepted inside the tolerance still derives "paid"; keep
        * the visible shortfall so E6 can show it. */
@@ -546,13 +585,15 @@
     if (!t) return null;
     var c = t.caseId ? getCase(t.caseId) : null;
     if (!c) {
+      var p = paymentForTx(t);
+      var hours = spec.deadlineHours != null ? spec.deadlineHours : (F.rules.holdDeadlineHours || 24);
       c = {
         id: "C-" + nextSuffix(state.cases || [], "C-"),
         txId: txId,
         internalReason: spec.internalReason || null,
         externalStatus: spec.externalStatus || "in_review",
         infoRequested: spec.infoRequested || null,
-        deadline: new Date(state.clock.getTime() + (spec.deadlineHours != null ? spec.deadlineHours : (F.rules.holdDeadlineHours || 24)) * 3600000).toISOString(),
+        deadline: addWorkingHours(state.clock, hours, entityForMerchant(p && p.merchantId)).toISOString(),
         decisionLog: []
       };
       state.cases.push(c);
@@ -603,7 +644,7 @@
     if (op.externalStatus) p.externalStatus = op.externalStatus;
     if (op.scheduleStatus) p.scheduleStatus = op.scheduleStatus;
     if (op.category) { p.reasonCategory = op.category; p.flaggedAt = ts(); }
-    if (op.deadlineHours != null) p.decisionDueBy = new Date(state.clock.getTime() + op.deadlineHours * 3600000).toISOString();
+    if (op.deadlineHours != null) p.decisionDueBy = addWorkingHours(state.clock, op.deadlineHours, entityForMerchant(p.merchantId)).toISOString();
     if (op.internal) p.internalReason = op.internal;
     if (op.note != null) p.note = op.note;
     if (op.info) p.infoRequested = op.info;
@@ -760,13 +801,14 @@
     var t = findTx(txId);
     if (!t) return null;
     if (t.caseId) return getCase(t.caseId);
+    var p = paymentForTx(t);
     var c = {
       id: "C-" + nextSuffix(state.cases, "C-"),
       txId: txId,
       internalReason: internalReason || null,
       externalStatus: externalStatus || "in_review",
       infoRequested: null,
-      deadline: new Date(state.clock.getTime() + (F.rules.holdDeadlineHours || 24) * 3600000).toISOString(),
+      deadline: addWorkingHours(state.clock, F.rules.holdDeadlineHours || 24, entityForMerchant(p && p.merchantId)).toISOString(),
       decisionLog: []
     };
     state.cases.push(c);
@@ -878,7 +920,7 @@
     if (extra) {
       if (extra.sc != null) p.receivedSc = F.math.round2((p.receivedSc || 0) + extra.sc);
       if (extra.category) { p.reasonCategory = extra.category; p.flaggedAt = ts(); }
-      if (extra.deadlineHours != null) p.decisionDueBy = new Date(state.clock.getTime() + extra.deadlineHours * 3600000).toISOString();
+      if (extra.deadlineHours != null) p.decisionDueBy = addWorkingHours(state.clock, extra.deadlineHours, entityForMerchant(p.merchantId)).toISOString();
       if (extra.internal) p.internalReason = extra.internal;
       if (extra.note != null) p.note = extra.note;
       if (extra.info) p.infoRequested = extra.info;
@@ -935,8 +977,49 @@
     }, 4000);
   }
 
+  /* --- Today versus Proposed (phase 4, followup §4.3) ------------------
+   * One switch, two presentations. Statuses remain defined once in
+   * statuses.js; strings.js holds the per-view labels and flags. Screens ask
+   * the store, so the switch is a pure read and never touches scenario state. */
+  function viewMode() {
+    return state && state.viewMode === "today" ? "today" : "proposed";
+  }
+
+  function setView(mode) {
+    if (!state) return;
+    state.viewMode = mode === "today" ? "today" : "proposed";
+    notify();
+  }
+
+  function variant(key) {
+    var all = window.GATE_STRINGS && window.GATE_STRINGS.statusVariants;
+    var v = all && all[key];
+    return v ? v[viewMode()] : null;
+  }
+
+  var VARIANT_FOR_STATUS = {
+    held: "held",
+    overdueHeld: "held",
+    partial: "partial",
+    overpaid: "overpaid"
+  };
+
+  function statusLabel(status, seat) {
+    var key = VARIANT_FOR_STATUS[status];
+    var v = key ? variant(key) : null;
+    if (v && v[seat]) return v[seat];
+    return (window.GATE_STATUSES && window.GATE_STATUSES.label(status, seat)) || status;
+  }
+
   function reset() {
+    /* A scenario reset must not flip the presenter's view or note setting. */
+    var keep = state ? { seat: state.seat, viewMode: state.viewMode, annotations: state.annotations } : null;
     init();
+    if (keep) {
+      state.seat = keep.seat || "payer";
+      state.viewMode = keep.viewMode === "today" ? "today" : "proposed";
+      state.annotations = !!keep.annotations;
+    }
     /* Navigation is the caller's responsibility; reset() only rebuilds state. */
     notify();
   }
@@ -959,6 +1042,11 @@
     ts: ts,
     addToast: addToast,
     reset: reset,
+    viewMode: viewMode,
+    setView: setView,
+    variant: variant,
+    statusLabel: statusLabel,
+    addWorkingHours: addWorkingHours,
 
     /* Phase 1b additions */
     addTransaction: addTransaction,

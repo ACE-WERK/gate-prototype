@@ -26,7 +26,7 @@
     if (isNaN(d.getTime())) return "—";
     d = new Date(d.getTime() + 4 * 3600000); // GST = UTC+4
     return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear() +
-      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST";
+      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST (UTC+4)";
   }
   function netKey(network) {
     return String(network || "").indexOf("TRC-20") === 0 ? "tron" : "ethereum";
@@ -98,7 +98,7 @@
     app.appendChild(el("div", "proto-badge", S().protoLabel));
 
     var chipRow = el("div", "chip-row");
-    chipRow.appendChild(el("span", "chip tone-" + (window.GATE_STATUSES.config[p.status] ? window.GATE_STATUSES.config[p.status].tone : "neutral"), window.GATE_STATUSES.label(p.status, "payer")));
+    chipRow.appendChild(el("span", "chip tone-" + (window.GATE_STATUSES.config[p.status] ? window.GATE_STATUSES.config[p.status].tone : "neutral"), G().statusLabel(p.status, "payer")));
     app.appendChild(chipRow);
 
     /* ---------- On-chain timeline ---------- */
@@ -134,6 +134,11 @@
 
     /* ---------- Status variant ---------- */
     var card = el("div", "card");
+    card.dataset.anchor = "s2-status";
+    var heldV = G().variant("held");
+    var partV = G().variant("partial");
+    var overV = G().variant("overpaid");
+    var lateV = G().variant("late");
     var variantKey = {
       paid: "paid", overpaid: "overpaid", partial: "partial",
       held: "review", overdueHeld: "review", action: "action",
@@ -147,7 +152,9 @@
     } else {
       var key = variantKey;
       var known = !!(key && v[key]);
-      card.appendChild(el("h2", "card-title", known ? v[key].headline : "Payment status"));
+      var headline = known ? v[key].headline : "Payment status";
+      if (known && (key === "review" || key === "action") && (!heldV.showDeadline || !heldV.showActions)) headline = heldV.payer;
+      card.appendChild(el("h2", "card-title", headline));
       if (!known) {
         card.appendChild(el("p", "", "Status: " + p.status));
       } else if (key === "paid") {
@@ -159,39 +166,56 @@
         var paidAt = evAt("payment.credited") || (p.timeline.length ? p.timeline[p.timeline.length - 1].ts : null);
         r.appendChild(row2(v[key].time, paidAt ? fmtGST(paidAt) : "—"));
         card.appendChild(r);
-        if (p.surplus > 0) card.appendChild(el("div", "banner info", v.overpaid.surplus.replace("{amount}", G().fmtSC(p.surplus, p.asset))));
+        if (p.surplus > 0 && overV.showSurplus) card.appendChild(el("div", "banner info", v.overpaid.surplus.replace("{amount}", G().fmtSC(p.surplus, p.asset))));
+        if (p.lateMatched) card.appendChild(el("div", lateV.matched ? "banner info" : "banner warning", lateV.body));
       } else if (key === "partial") {
         var r2 = el("div", "kv");
         r2.appendChild(row2(v[key].received, G().fmtSC(p.receivedSc, p.asset)));
-        r2.appendChild(row2(v[key].remaining, G().fmtSC(Math.max(0, p.requestedSc - p.receivedSc), p.asset)));
+        if (partV.showRemaining) r2.appendChild(row2(v[key].remaining, G().fmtSC(Math.max(0, p.requestedSc - p.receivedSc), p.asset)));
         card.appendChild(r2);
-        card.appendChild(el("p", "", v[key].keepPaying));
-        card.appendChild(copyBlock(p.address, p.asset, p.network));
+        if (partV.showRemaining) card.appendChild(el("p", "", v[key].keepPaying));
+        if (partV.showAddress) card.appendChild(copyBlock(p.address, p.asset, p.network));
+        if (!partV.showRemaining) card.appendChild(el("p", "muted", partV.note));
       } else if (key === "review") {
-        var deadline = p.decisionDueBy ? fmtGST(p.decisionDueBy) : "—";
-        card.appendChild(el("p", "", v[key].body.replace("{deadline}", deadline)));
-        card.appendChild(el("p", "muted", v[key].whatNext));
-        var r3 = el("div", "kv");
-        r3.appendChild(row2("Reference", p.id));
-        card.appendChild(r3);
+        if (!heldV.showDeadline) {
+          card.appendChild(el("p", "", heldV.payerBody));
+          card.appendChild(el("p", "muted", v[key].whatNext));
+          var r0 = el("div", "kv");
+          r0.appendChild(row2("Reference", p.id));
+          card.appendChild(r0);
+        } else {
+          var deadline = p.decisionDueBy ? fmtGST(p.decisionDueBy) : "—";
+          card.appendChild(el("p", "", v[key].body.replace("{deadline}", deadline)));
+          card.appendChild(el("p", "muted", v[key].whatNext));
+          var r3 = el("div", "kv");
+          r3.appendChild(row2("Reference", p.id));
+          card.appendChild(r3);
+        }
         if (p.checksDelayed) card.appendChild(el("div", "banner neutral", S().status.slowChecks));
       } else if (key === "action") {
-        card.appendChild(el("p", "", v[key].body));
-        var banner = el("div", "banner warning");
-        banner.appendChild(el("strong", "", v[key].request + ": " + (p.infoRequested || "Documents")));
-        card.appendChild(banner);
-        var up = el("button", "btn primary", v[key].uploadBtn);
-        up.type = "button";
-        up.addEventListener("click", function () {
-          p.infoProvided = true;
-          p.timeline.push({ ts: G().ts(), seat: "payer", text: "Information uploaded", internal: false });
-          G().addToast("Information received (simulated)", "success");
-          G().notify();
-        });
-        card.appendChild(up);
-        if (p.infoProvided) card.appendChild(el("div", "badge success", "✓ " + v[key].uploadDone));
+        if (!heldV.showActions) {
+          card.appendChild(el("p", "", heldV.payerBody));
+          var r5 = el("div", "kv");
+          r5.appendChild(row2("Reference", p.id));
+          card.appendChild(r5);
+        } else {
+          card.appendChild(el("p", "", v[key].body));
+          var banner = el("div", "banner warning");
+          banner.appendChild(el("strong", "", v[key].request + ": " + (p.infoRequested || "Documents")));
+          card.appendChild(banner);
+          var up = el("button", "btn primary", v[key].uploadBtn);
+          up.type = "button";
+          up.addEventListener("click", function () {
+            p.infoProvided = true;
+            p.timeline.push({ ts: G().ts(), seat: "payer", text: "Information uploaded", internal: false });
+            G().addToast("Information received (simulated)", "success");
+            G().notify();
+          });
+          card.appendChild(up);
+          if (p.infoProvided) card.appendChild(el("div", "badge success", "✓ " + v[key].uploadDone));
+        }
       } else if (key === "overpaid") {
-        card.appendChild(el("p", "", v[key].surplus.replace("{amount}", G().fmtSC(p.surplus, p.asset))));
+        if (overV.showSurplus) card.appendChild(el("p", "", v[key].surplus.replace("{amount}", G().fmtSC(p.surplus, p.asset))));
       } else if (key === "returned") {
         card.appendChild(el("p", "", v[key].body));
         var r4 = el("div", "kv");
@@ -230,6 +254,7 @@
     var r = S().refund;
     var v = S().status.variants.returned;
     var card = el("div", "card accent");
+    card.dataset.anchor = "s2-refund";
     card.appendChild(el("h2", "card-title", r.heading));
 
     var kv = el("div", "kv");

@@ -17,6 +17,7 @@
      every store notification, so a class on #demo-bar would not survive. */
   var _collapsed = false;
   var _hidden = false;
+  var _autoCollapsed = false;
   /* Compliance panel state, same reason. */
   var _panelOpen = false;
   var _panelCaseId = null;
@@ -24,6 +25,9 @@
   var _panelReason = "";
   var _panelNote = "";
   var _panelError = "";
+  /* Annotations (phase 4): which note is open, and one listener set. */
+  var _annOpen = null; // { screen, i }
+  var _annListeners = false;
 
   function S() { return window.GATE_STRINGS; }
   function G() { return window.GATE_STORE; }
@@ -516,11 +520,94 @@
     return net;
   }
 
+  /* ---- annotations (phase 4, followup §4.4) ---------------------------- */
+
+  function currentScreen() {
+    var h = window.location.hash || "";
+    if (/^#\/payer\/checkout/.test(h)) return "payer-checkout";
+    if (/^#\/payer\/status/.test(h)) return "payer-status";
+    if (/^#\/merchant\/payments\/[^/?]+/.test(h)) return "merchant-payment-detail";
+    if (/^#\/merchant\/payments/.test(h)) return "merchant-payments";
+    return null;
+  }
+
+  /* Numbered pins anchored to the current screen. At most four per screen;
+   * notes live in strings.js. Pins are fixed-position and re-laid on scroll,
+   * resize and hash change, so they follow the element they point at. */
+  function renderAnnotations() {
+    var st = G().get();
+    var layer = document.getElementById("annotation-layer");
+    if (!st || !st.annotations) {
+      if (layer) layer.innerHTML = "";
+      return;
+    }
+    if (!layer) {
+      layer = el("div", "annotation-layer");
+      layer.id = "annotation-layer";
+      document.body.appendChild(layer);
+    }
+    layer.innerHTML = "";
+    var key = currentScreen();
+    var defs = (S().annotations.screens[key] || []).slice(0, 4);
+    var openIdx = (_annOpen && _annOpen.screen === key) ? _annOpen.i : -1;
+    var placed = 0;
+
+    defs.forEach(function (def, i) {
+      var target = document.querySelector(def.anchor);
+      if (!target) return;
+      var r = target.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) return;
+      var num = placed + 1;
+      var pin = el("button", "annotation-pin", String(num));
+      pin.type = "button";
+      pin.setAttribute("aria-label", S().annotations.label.replace("{n}", String(num)));
+      pin.setAttribute("aria-expanded", openIdx === i ? "true" : "false");
+      pin.style.left = Math.max(4, r.left - 12) + "px";
+      pin.style.top = Math.max(4, r.top + 8) + "px";
+      pin.addEventListener("click", function () {
+        _annOpen = (openIdx === i) ? null : { screen: key, i: i };
+        renderAnnotations();
+      });
+      layer.appendChild(pin);
+
+      if (openIdx === i) {
+        var note = el("div", "annotation-note");
+        note.appendChild(el("div", "annotation-note-title", S().annotations.title + " " + num));
+        note.appendChild(el("div", "annotation-note-text", def.text));
+        var close = el("button", "annotation-close", "×");
+        close.type = "button";
+        close.setAttribute("aria-label", S().annotations.close);
+        close.addEventListener("click", function () { _annOpen = null; renderAnnotations(); });
+        note.appendChild(close);
+        var w = Math.min(288, window.innerWidth - 32);
+        note.style.width = w + "px";
+        note.style.left = Math.max(8, Math.min(r.left + 24, window.innerWidth - w - 8)) + "px";
+        note.style.top = Math.max(8, Math.min(r.top + 36, window.innerHeight - 170)) + "px";
+        layer.appendChild(note);
+      }
+      placed++;
+    });
+  }
+
+  function annotationListeners() {
+    if (_annListeners) return;
+    _annListeners = true;
+    window.addEventListener("resize", renderAnnotations);
+    window.addEventListener("scroll", renderAnnotations, true);
+    window.addEventListener("hashchange", renderAnnotations);
+  }
+
   /* ---- demo bar ------------------------------------------------------- */
 
   function build() {
     var bar = document.getElementById("demo-bar");
     if (!bar) return;
+    /* On a phone the full bar would eat the screen: start collapsed once. */
+    if (!_autoCollapsed) {
+      _autoCollapsed = true;
+      if (window.innerWidth <= 700) _collapsed = true;
+    }
+    annotationListeners();
     var st = G().get();
     var d = S().demoBar;
 
@@ -538,6 +625,7 @@
       handle.addEventListener("click", function () { _hidden = false; build(); });
       bar.appendChild(handle);
       syncPanel();
+      renderAnnotations();
       return;
     }
 
@@ -677,6 +765,7 @@
     bar.appendChild(body);
 
     syncPanel();
+    renderAnnotations();
   }
 
   function refreshClock(row) {
@@ -713,17 +802,18 @@
   }
 
   function setView(mode) {
-    var st = G().get();
-    st.viewMode = mode;
-    document.body.classList.toggle("view-proposed", mode === "proposed");
-    build();
+    /* The store owns the switch: setting it re-renders the bar and the screen
+     * through the normal subscription, and touches no scenario state. */
+    G().setView(mode);
   }
 
   function toggleAnnotations() {
     var st = G().get();
     st.annotations = !st.annotations;
+    if (!st.annotations) _annOpen = null;
     document.body.classList.toggle("annotations-on", st.annotations);
     build();
+    renderAnnotations();
   }
 
   function loadScenario(id, startStep) {
@@ -830,6 +920,7 @@
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         if (_panelOpen) { closePanel(); e.preventDefault(); }
+        else if (_annOpen) { _annOpen = null; renderAnnotations(); e.preventDefault(); }
         return;
       }
       var t = e.target;
@@ -852,6 +943,7 @@
     G().subscribe(function () {
       build();
       window.GATE_ROUTER.render();
+      renderAnnotations();
     });
   }
 

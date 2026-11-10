@@ -41,7 +41,7 @@
       annotations: "Annotations",
       hide: "Hide demo bar (H)",
       show: "Show demo bar (H)",
-      keys: "Keys: 1 payer · 2 merchant · → next · R reset · T view · N notes · H hide · C compliance",
+      keys: "Keys: 1 payer · 2 merchant · → next · R reset · T Today/Proposed · N notes · H hide · C compliance",
       collapsed: "Demo bar"
     },
 
@@ -225,7 +225,9 @@
       rateWaiting: "Not yet applied. Funds convert when released.",
       hold: {
         title: "Payment on hold",
-        dueBy: "Decision due by",
+        todayTitle: "Payment status",
+        todayStatus: "Pending",
+        dueBy: "Decision due by (working days)",
         reasonCategory: "Reason (merchant-safe)",
         needed: "What is needed and from whom",
         outcomes: "Possible outcomes",
@@ -250,7 +252,12 @@
         refunded: "Surplus refunded",
         noNext: "No later instalment on file to apply it to."
       },
-      late: { notice: "Late payment matched", detail: "Arrived after the link expired on {expiry}; matched automatically to this checkout." }
+      late: {
+        notice: "Late payment matched",
+        detail: "Arrived after the link expired on {expiry}; matched automatically to this checkout.",
+        unallocated: "Unallocated funds",
+        unallocatedDetail: "This payment arrived after expiry and is not matched. Operations will trace and allocate it by hand."
+      }
     },
 
     // S5 Compliance case (screen removed in phase 3a; strings kept for the
@@ -520,7 +527,160 @@
       label: "View",
       today: "Today",
       proposed: "Proposed",
-      gst: "GST (UTC+4)"
+      gst: "GST (UTC+4)",
+      todayNote: "What the current product shows.",
+      proposedNote: "What this prototype proposes."
+    },
+
+    /* Phase 4 — status-config variants for Today versus Proposed (followup
+     * §4.3). The status is still defined once (statuses.js); these are the two
+     * presentations of the five moments the case contrasts. Screens read them
+     * through GATE_STORE.variant(key) and GATE_STORE.statusLabel(status, seat),
+     * so toggling the switch never touches scenario state. */
+    statusVariants: {
+      held: {
+        today: {
+          payer: "Payment pending",
+          merchant: "Pending",
+          showDeadline: false,
+          showReason: false,
+          showNeeded: false,
+          showOutcomes: false,
+          showActions: false,
+          showEvents: false,
+          payerBody: "This payment is pending. We will contact you if there is an update.",
+          merchantNote: "Today: the merchant sees Pending with no time and no next step; the payer is not told what is happening."
+        },
+        proposed: {
+          payer: "Under review",
+          merchant: "On hold",
+          showDeadline: true,
+          showReason: true,
+          showNeeded: true,
+          showOutcomes: true,
+          showActions: true,
+          showEvents: true,
+          payerBody: "Your payment is being checked. A decision is expected by {deadline}.",
+          merchantNote: "Proposed: neutral status, a decision deadline, what is needed, and the events sent."
+        }
+      },
+      partial: {
+        today: {
+          payer: "Partially paid",
+          merchant: "Partially paid",
+          showRemaining: false,
+          showAddress: false,
+          showTopUp: false,
+          note: "Today: no remaining amount and no way to top up from the status page."
+        },
+        proposed: {
+          payer: "Partially paid",
+          merchant: "Partially paid",
+          showRemaining: true,
+          showAddress: true,
+          showTopUp: true,
+          note: "Proposed: the remaining amount, the same address and a top-up link."
+        }
+      },
+      overpaid: {
+        today: {
+          payer: "Paid",
+          merchant: "Credited",
+          showSurplus: false,
+          showActions: false,
+          note: "Today: the surplus is credited silently; neither side sees it."
+        },
+        proposed: {
+          payer: "Paid",
+          merchant: "Overpaid",
+          showSurplus: true,
+          showActions: true,
+          note: "Proposed: the surplus is shown to both sides with apply or refund."
+        }
+      },
+      late: {
+        today: {
+          headline: "Payment received",
+          body: "Funds arrived that Gate could not match to a checkout. Operations will trace and allocate them.",
+          matched: false,
+          note: "Today: operations see “unallocated funds” and trace them by hand."
+        },
+        proposed: {
+          headline: "Payment received",
+          body: "The payment arrived after the link expired and was matched to this checkout automatically.",
+          matched: true,
+          note: "Proposed: late payments are matched automatically to the expired checkout."
+        }
+      },
+      payerDetails: {
+        today: {
+          collected: false,
+          value: "Not collected",
+          note: "Today Gate collects name and country only. The buyer question, relationship and wallet type are not collected, so the merchant cannot see who paid."
+        },
+        proposed: {
+          collected: true,
+          value: "",
+          note: "Proposed: name, country, the buyer answer and wallet type are collected before the address is shown."
+        }
+      }
+    },
+
+    /* Phase 4 — numbered annotation pins (followup §4.4). Keyed by screen,
+     * anchor selector, 1-3 sentences: the decision, why, and the roadmap line.
+     * At most four per screen. "UAE tipping-off rules, to confirm with Legal"
+     * is the agreed external wording; no article numbers. */
+    annotations: {
+      title: "Note",
+      hint: "N hides notes",
+      label: "Show note {n}",
+      close: "Close note",
+      screens: {
+        "payer-checkout": [
+          {
+            anchor: "[data-anchor=\"s1-payer-details\"]",
+            text: "The Travel Rule questions come before the address: name, country, the buyer question and wallet type. A third-party payer is routed to review, not blocked — the classic real-estate AML risk. Roadmap: Quarter 1 · Travel Rule capture."
+          },
+          {
+            anchor: "[data-anchor=\"s1-address\"]",
+            text: "Address poisoning and wrong-network sends are the main loss vectors on Tron. The address is grouped in fours with the ends emphasised, the network sits beside it, and the copy toast repeats asset and network. Roadmap: Quarter 1 · Address safety."
+          }
+        ],
+        "payer-status": [
+          {
+            anchor: "[data-anchor=\"s2-status\"]",
+            text: "“In review” is deliberately neutral and owned by Compliance. Saying why would breach UAE tipping-off rules, to confirm with Legal. Roadmap: Quarter 1 · Hold workflow, 18%."
+          },
+          {
+            anchor: "[data-anchor=\"s2-refund\"]",
+            text: "Payments from exchanges arrive from the exchange's shared wallet, so a refund needs an address in the payer's own account. Own-wallet payments go back to the sending address after re-screening. Roadmap: Quarter 1 · Refunds."
+          }
+        ],
+        "merchant-payments": [
+          {
+            anchor: "[data-anchor=\"s3-tiles\"]",
+            text: "Available excludes in-review and frozen money; in review is shown at the current rate. The ledger move is 20% of quarter one. Roadmap: Quarter 1 · Ledger states, 20%."
+          },
+          {
+            anchor: "[data-anchor=\"s3-list\"]",
+            text: "Each payment carries its own transactions, so a top-up while part is held reads as partially credited rather than one blended status. Roadmap: Quarter 1 · Ledger states, 20%."
+          }
+        ],
+        "merchant-payment-detail": [
+          {
+            anchor: "[data-anchor=\"s4-transactions\"]",
+            text: "Screening, holds and crediting happen per transaction, not per payment. A payment's status is derived from its transactions and the amount due. Roadmap: Quarter 1 · Hold workflow, 18%."
+          },
+          {
+            anchor: "[data-anchor=\"s4-events\"]",
+            text: "Event payloads carry the external status only — never an internal reason, risk score or screening result. Roadmap: Quarter 1 · Merchant API."
+          },
+          {
+            anchor: "[data-anchor=\"s4-hold\"]",
+            text: "The 24-hour decision deadline counts working days only (UAE Mon–Fri, Bahrain Sun–Thu). The proposed measure is 80% of holds decided within one business day, to agree with Compliance. Roadmap: Quarter 1 · Hold workflow, 18%."
+          }
+        ]
+      }
     },
 
     // Status labels per seat (used by chips)

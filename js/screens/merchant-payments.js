@@ -27,13 +27,13 @@
     var d = gstShift(value);
     if (!d) return "—";
     return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear() +
-      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST";
+      ", " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST (UTC+4)";
   }
   function csvTime(value) {
     var d = gstShift(value);
     if (!d) return "";
     return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) +
-      " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST";
+      " " + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + " GST (UTC+4)";
   }
   function fmtElapsed(ms) {
     var mins = Math.max(0, Math.floor(ms / 60000));
@@ -58,11 +58,12 @@
 
     /* ---------- Balance tiles ---------- */
     var tiles = el("div", "tiles");
+    tiles.dataset.anchor = "s3-tiles";
     var available = sumLedger("available");
     var inReview = sumLedger("in_review");
     var collected = collectedThisMonth();
     tiles.appendChild(tile(m.tiles.available, G().fmtAED(available), m.tiles.availableHint));
-    tiles.appendChild(tile(m.tiles.inReview, G().fmtAED(inReview), m.tiles.inReviewHint));
+    tiles.appendChild(tile(G().statusLabel("held", "merchant"), G().fmtAED(inReview), m.tiles.inReviewHint));
     tiles.appendChild(tile(m.tiles.collected, G().fmtAED(collected), m.tiles.collectedHint));
     app.appendChild(tiles);
 
@@ -74,7 +75,7 @@
     ["all","paid","held","overdueHeld","action","partial","overpaid","declined","frozen","expired","needsManual","pending"].forEach(function (s) {
       var o = document.createElement("option");
       o.value = s;
-      o.textContent = s === "all" ? m.filters.all : window.GATE_STATUSES.label(s, "merchant");
+      o.textContent = s === "all" ? m.filters.all : G().statusLabel(s, "merchant");
       filter.appendChild(o);
     });
     filter.addEventListener("change", function () { drawList(); });
@@ -97,6 +98,7 @@
     /* ---------- List ---------- */
     var listWrap = el("div", "payments-list");
     listWrap.id = "payments-list";
+    listWrap.dataset.anchor = "s3-list";
     /* Fallback containment for wide content above the stacking breakpoint. */
     listWrap.style.overflowX = "auto";
     app.appendChild(listWrap);
@@ -203,13 +205,13 @@
         var tdCred = el("td", "num", credited ? G().fmtAED(credited) : "—"); tdCred.dataset.label = m.table.credited; tr.appendChild(tdCred);
         var tdStatus = el("td", "");
         tdStatus.dataset.label = m.table.status;
-        var chip = el("span", "chip tone-" + window.GATE_STATUSES.config[p.status].tone, window.GATE_STATUSES.label(p.status, "merchant"));
+        var chip = el("span", "chip tone-" + window.GATE_STATUSES.config[p.status].tone, G().statusLabel(p.status, "merchant"));
         tdStatus.appendChild(chip);
         if (txs.length > 1) {
           var txNote = el("div", "cell-sub", m.txCount.replace("{n}", String(txs.length)) + m.txSeparator + txs.map(txLabel).join(", "));
           tdStatus.appendChild(txNote);
         }
-        if (held) {
+        if (held && G().variant("held").showDeadline) {
           var dueNote = el("div", "cell-sub");
           if (p.decisionDueBy) {
             var due = new Date(p.decisionDueBy);
