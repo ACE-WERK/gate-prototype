@@ -42,9 +42,15 @@
     return Math.round(num(n) * 100) / 100;
   }
 
-  function isFrozen(tx) { return tx && tx.status === "frozen"; }
-  function isInReview(tx) { return tx && tx.status === "in_review"; }
-  function isCleared(tx) { return tx && tx.status === "cleared"; }
+  function isFrozen(tx) {
+    return tx && (tx.status === "frozen" || tx.screeningState === "frozen");
+  }
+  function isInReview(tx) {
+    return tx && (tx.status === "in_review" || tx.screeningState === "in_review" || tx.status === "held");
+  }
+  function isCleared(tx) {
+    return tx && (tx.status === "cleared" || (tx.screeningState === "clear" && tx.status !== "frozen" && tx.status !== "held" && tx.status !== "in_review"));
+  }
 
   /* AED value of a stablecoin amount, after the Gate fee. */
   function creditValue(amountSc, aedPerUsd, assetUsd, feePct) {

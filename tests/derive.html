@@ -62,14 +62,14 @@ h1{font-size:18px}
   check("E15 (approved): clearedSc=68073.52", Math.abs(e15b.clearedSc - 68073.52) < 0.01);
 
   // E15 credited AED: 29,353.50 + 218,146.50 = 247,500.00
-  var feeRate = 0.024;
-  var rate = 3.6;
+  var feeRate = 0.01;  // matches derive.js DEFAULT_FEE_PCT
+  var rate = 3.6725;  // matches derive.js DEFAULT_AED_PER_USD
   var credited1 = 8073.52 * rate * (1 - feeRate);
   var credited2 = 60000.00 * rate * (1 - feeRate);
   var totalCredited = credited1 + credited2;
-  check("E15: credit1 ≈ 29353.50", Math.abs(credited1 - 29353.50) < 1.0, "got " + credited1.toFixed(2));
-  check("E15: credit2 ≈ 218146.50", Math.abs(credited2 - 218146.50) < 1.0, "got " + credited2.toFixed(2));
-  check("E15: total ≈ 247500.00", Math.abs(totalCredited - 247500.00) < 2.0, "got " + totalCredited.toFixed(2));
+  check("E15: credit1 = 29353.50", Math.abs(credited1 - 29353.50) < 0.01, "got " + credited1.toFixed(2));
+  check("E15: credit2 = 218146.50", Math.abs(credited2 - 218146.50) < 0.01, "got " + credited2.toFixed(2));
+  check("E15: total = 247500.00", Math.abs(totalCredited - 247500.00) < 0.01, "got " + totalCredited.toFixed(2));
 
   // === E5: overpaid ===
   var e5 = D.derivePayment([tx(27500.00)], 27229.41, 0.005);
