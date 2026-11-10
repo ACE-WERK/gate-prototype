@@ -15,9 +15,8 @@
     demoAddressLabel: "Demo address. Do not send funds.",
     buyerVerified: "Buyer verified",
 
-    /* The demo bar still renders a seat per key. Compliance is a demo-bar
-     * panel in phase 3b, not a seat; removing the key here would print
-     * "undefined" until demo-bar.js changes. */
+    /* Only payer and merchant are seats. Compliance is a demo-bar panel
+     * (phase 3b), not a seat; the key stays for statusLabels lookups. */
     seats: { payer: "Payer", merchant: "Merchant", compliance: "Compliance" },
 
     demoBar: {
@@ -35,8 +34,30 @@
       vol1: "One row",
       vol200: "200 rows",
       clock: "Demo clock",
-      keys: "Keys: 1/2/3 seat · → next · R reset",
+      map: "Demo map",
+      viewLabel: "View",
+      today: "Today",
+      proposed: "Proposed",
+      annotations: "Annotations",
+      hide: "Hide demo bar (H)",
+      show: "Show demo bar (H)",
+      keys: "Keys: 1 payer · 2 merchant · → next · R reset · T view · N notes · H hide · C compliance",
       collapsed: "Demo bar"
+    },
+
+    // Demo map at #/ (demo tooling, not a product screen). Card copy lives in
+    // js/screens/demo-map.js, next to the scenarios it links to.
+    demoMap: {
+      title: "Gate · prototype",
+      label: "Illustrative data",
+      intro: "Seventeen scenarios across three groups. Each opens the seat where the behaviour is easiest to see, at step 1.",
+      start: "Start",
+      groups: {
+        everyday: "Everyday payments",
+        held: "When a payment is held",
+        timing: "Timing and exceptions"
+      },
+      backToMap: "Back to the demo map"
     },
 
     // S1 Payer checkout
@@ -378,6 +399,50 @@
       notePlaceholder: "Why this decision was taken (analyst only)",
       reasonRequired: "Choose an internal reason.",
       noteRequired: "A note is required.",
+      chooseAction: "Choose a decision",
+      caseSelect: "Case",
+      noCases: "No case is open right now.",
+      buyerYes: "Yes — the buyer named on the agreement",
+      buyerNo: "No — paying for the buyer",
+      relationshipLabel: "Relationship",
+      notCollected: "Not collected in this demo state",
+      screeningLine: "Screening: {clear} of 3 checks clear (illustrative)",
+      walletHistoryLine: "An earlier instalment from this wallet cleared on {date}.",
+      reasons: [
+        "Sanctions watchlist match",
+        "Source of funds unclear",
+        "Third-party payer verification",
+        "Address change detected",
+        "Volume anomaly"
+      ],
+      outcomes: {
+        approve: {
+          payer: "Payment received.",
+          merchant: "Credited — the payment has been released to your balance.",
+          event: "payment.credited"
+        },
+        request: {
+          payer: "Information needed to release this payment.",
+          merchant: "Action needed — information has been requested from the payer.",
+          event: "payment.information_requested"
+        },
+        decline: {
+          payer: "This payment could not be accepted and has been returned to the sending wallet.",
+          payerExchange: "Refunded to an address in your own exchange account.",
+          merchant: "Declined and refunded to the sender.",
+          event: "payment.refunded"
+        },
+        freeze: {
+          payer: "This payment cannot be released at this time. Our team will contact you if anything is needed.",
+          merchant: "This payment cannot be released at this time.",
+          event: "payment.cannot_be_released"
+        }
+      },
+      confirm: "Confirm decision",
+      close: "Close panel",
+      previewEmpty: "Choose a decision to see exactly what the payer and the merchant will see.",
+      reasonNeverShared: "The internal reason and note are never shown outside Compliance and never appear in an event.",
+      done: "Decision recorded: {action}. Payer and merchant views updated.",
       preview: "Preview — what will be shown",
       payerPreview: "Payer sees",
       merchantPreview: "Merchant sees",
